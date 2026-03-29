@@ -3786,12 +3786,21 @@
       'bg-stahl':          '#b0b8bf',
       'bg-wiese':          '#d4e8c2',
       'bg-rost':           '#8b3a2a',
-      // Foto-Hintergründe: Näherungsfarbe für die Minivorschau im Archiv
+      // Foto-Hintergründe: Näherungsfarbe als Fallback
       'bg-foto-pergament': '#d4b896',
       'bg-foto-wiese':     '#5a8a3c',
       'bg-foto-rost':      '#7a3020',
       'bg-foto-stahl':     '#7a8a95',
       'bg-foto-wasser':    '#2a5a8a',
+    };
+
+    // Foto-Hintergründe: echte Bild-URLs für die Minivorschau
+    const hintergrundBilder = {
+      'bg-foto-pergament': 'IMG/Pergament.png',
+      'bg-foto-wiese':     'IMG/wiese.png',
+      'bg-foto-rost':      'IMG/Rost.png',
+      'bg-foto-stahl':     'IMG/stahl.png',
+      'bg-foto-wasser':    'IMG/Wasser.png',
     };
 
     // ---- HTML-Tags entfernen ----
@@ -3820,6 +3829,10 @@
       if (!daten) return '<div style="color:#bbb;font-size:12px;text-align:center;margin-top:40px">Leere Seite</div>';
 
       const bgFarbe = hintergrundFarben[daten.hintergrund] || '#fdfaf5';
+      const bgBild  = hintergrundBilder[daten.hintergrund];
+      const bgStyle = bgBild
+        ? `background-image:url('${bgBild}');background-size:cover;background-position:center;`
+        : `background:${bgFarbe};`;
       const { breite, hoehe } = seitenPixelGroesse();
 
       // Echte Canvas-Größe aus JSON (neu gespeicherte Dateien), Fallback: aus Positionen schätzen
@@ -3950,7 +3963,7 @@
       return `
         <div class="seite-datum">${daten.datum || ''}</div>
         <div class="seite-tagessatz">${daten.tagessatz || ''}</div>
-        <div class="seite-vorschau-flaeche" style="background:${bgFarbe};">
+        <div class="seite-vorschau-flaeche" style="${bgStyle}">
           ${siegelBadge}
           ${bohnenVorschau}
           <div style="position:absolute;inset:0;overflow:hidden;">
