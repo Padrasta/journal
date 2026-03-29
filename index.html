@@ -1774,7 +1774,10 @@
     ];
 
     function tagessatzAnzeigen() {
-      const i = Math.floor(Math.random() * tagessaetze.length);
+      // Datum als Seed — gleicher Tag ergibt immer denselben Satz
+      const heute = new Date();
+      const seed  = heute.getFullYear() * 10000 + (heute.getMonth() + 1) * 100 + heute.getDate();
+      const i     = seed % tagessaetze.length;
       document.getElementById('tagessatz').textContent = tagessaetze[i];
     }
     tagessatzAnzeigen();
