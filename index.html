@@ -3711,7 +3711,7 @@
 
         for (let j = 0; j < count; j++) {
           const img = document.createElement('img');
-          img.src = 'img/Bohne.svg';
+          img.src = 'IMG/Bohne.svg';
           img.className = 'bohne';
           img.draggable = false;
 
@@ -3975,7 +3975,7 @@
             const nx  = (seededRand(bi * 4)     - 0.5) * 4;
             const ny  = (seededRand(bi * 4 + 1) - 0.5) * 3;
             const rot = (seededRand(bi * 4 + 2) - 0.5) * 44;
-            bImgs += `<img src="img/Bohne.svg" draggable="false" style="position:absolute;
+            bImgs += `<img src="IMG/Bohne.svg" draggable="false" style="position:absolute;
               left:${(sx + j*SX + nx).toFixed(1)}px;top:${(y+ny).toFixed(1)}px;
               width:${BW}px;z-index:${zB+j};
               transform:rotate(${rot.toFixed(1)}deg);transform-origin:center center;">`;
