@@ -1607,6 +1607,22 @@
     </div>
   </div>
 
+  <!-- Drive-Login-Modal: erscheint beim ersten Seitenaufruf -->
+  <div class="modal-overlay sichtbar" id="drive-login-modal">
+    <div class="modal">
+      <span class="modal-siegel">☁️</span>
+      <div class="modal-titel">Mit Google Drive verbinden?</div>
+      <div class="modal-text">
+        Dein Journal wird automatisch in <strong>Google Drive</strong> gespeichert und synchronisiert.<br><br>
+        Du kannst dich auch später über das ☁️ in der Sidebar verbinden.
+      </div>
+      <div class="modal-buttons">
+        <button class="modal-btn abbrechen"   id="drive-modal-spaeter">Später</button>
+        <button class="modal-btn bestaetigen" id="drive-modal-verbinden">Mit Drive verbinden</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Hintergrund-Panel: erscheint links neben der Sidebar -->
   <div class="hintergrund-panel" id="hintergrund-panel">
     <div class="hintergrund-panel-titel">Hintergrund</div>
@@ -3374,6 +3390,20 @@
             document.getElementById('mobile-drive-label').textContent = 'Drive ✓';
           }
         }
+      });
+
+      // ---- Drive-Login-Modal: Buttons verdrahten ----
+      const driveLoginModal  = document.getElementById('drive-login-modal');
+      const btnDriveVerbinden = document.getElementById('drive-modal-verbinden');
+      const btnDriveSpaeter   = document.getElementById('drive-modal-spaeter');
+
+      btnDriveVerbinden.addEventListener('click', () => {
+        driveLoginModal.classList.remove('sichtbar');
+        driveTokenClient.requestAccessToken();         // normaler Login-Flow
+      });
+
+      btnDriveSpaeter.addEventListener('click', () => {
+        driveLoginModal.classList.remove('sichtbar');  // einfach schließen
       });
     }
 
