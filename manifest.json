@@ -1,0 +1,27 @@
+{
+  "name": "Journal",
+  "short_name": "Journal",
+  "description": "Journaling vor Digitals",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fdfaf5",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "img/Bohne.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Schöner Moment",
+      "short_name": "Bohne",
+      "description": "Einen schönen Moment des Tages zählen",
+      "url": "./bohne.html",
+      "icons": [{ "src": "img/Bohne.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ]
+}

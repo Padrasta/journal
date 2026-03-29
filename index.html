@@ -1,0 +1,4289 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Journal</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Journal">
+
+  <!-- Google Fonts: Playfair für Überschriften, Inter für Text, Caveat für Handschrift -->
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@300;400;700&family=Caveat:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- Google Identity Services: für OAuth-Login mit Google-Account -->
+  <script src="https://accounts.google.com/gsi/client" onload="gisInit()" async defer></script>
+
+  <style>
+    /* ===== RESET & GRUNDEINSTELLUNGEN ===== */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      font-family: 'Inter', sans-serif;
+      background: #1a1a1a;
+      color: #333;
+      overflow: hidden;
+    }
+
+    /* ===== HAUPTBEREICH ===== */
+    .app-container {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ===== JOURNAL-SEITE (links) ===== */
+    .journal-page {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ===== KOPFBEREICH ===== */
+    .page-header {
+      padding: 20px 28px 16px;
+      background: #fff;
+      border-bottom: 1px solid #e0d8cc;
+      flex-shrink: 0;
+    }
+
+    .page-date {
+      font-family: 'Playfair Display', serif;
+      font-size: 13px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #999;
+      margin-bottom: 4px;
+    }
+
+    .page-quote {
+      font-family: 'Playfair Display', serif;
+      font-size: 17px;
+      font-style: italic;
+      color: #444;
+      line-height: 1.5;
+    }
+
+    /* ===== GESTALTUNGSFLÄCHE: dunkler Schreibtisch ===== */
+    .design-surface {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      background: #1e1e1e;
+      user-select: none;
+    }
+
+    /* ===== CANVAS: das eigentliche Dokument (immer 750×1060) ===== */
+    #flaeche {
+      width: 750px;
+      height: 1060px;
+      flex-shrink: 0;
+      position: relative;
+      background: #fdfaf5;
+      background-image:
+        linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      transform-origin: center center;
+      box-shadow: 0 4px 40px rgba(0,0,0,0.5);
+    }
+
+    /* Platzhaltertext verschwindet sobald etwas auf der Fläche ist */
+    .design-surface-hint {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: #ccc;
+      font-size: 14px;
+      pointer-events: none;
+      user-select: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .design-surface-hint p {
+      margin-top: 8px;
+      font-size: 12px;
+    }
+
+    /* ===== REFLEXIONSBEREICH ===== */
+    .reflection-area {
+      padding: 16px 28px;
+      background: #fff;
+      border-top: 1px solid #e0d8cc;
+      flex-shrink: 0;
+    }
+
+    .reflection-label {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #aaa;
+      margin-bottom: 8px;
+    }
+
+    .reflection-input {
+      width: 100%;
+      border: none;
+      outline: none;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      color: #444;
+      background: transparent;
+      resize: none;
+      height: 52px;
+      line-height: 1.6;
+    }
+
+    .reflection-input::placeholder {
+      color: #ddd;
+    }
+
+    /* ===== SIDEBAR ===== */
+    .sidebar {
+      width: 72px;
+      background: #fff;
+      border-left: 1px solid #e0d8cc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 0;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .sidebar-tool {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 20px;
+      color: #bbb;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+    }
+
+    .sidebar-tool:hover {
+      background: #f5f5f5;
+      color: #555;
+      border-color: #e0e0e0;
+    }
+
+    .sidebar-divider {
+      width: 32px;
+      height: 1px;
+      background: #eee;
+      margin: 4px 0;
+    }
+
+    /* ===== HINTERGRUND-VARIANTEN ===== */
+    .bg-pergament {
+      background-color: #f4ead0 !important;
+    }
+    .bg-stahl {
+      background-color: #b0b8bf !important;
+    }
+    .bg-rost {
+      background-color: #8b3a2a !important;
+    }
+    .bg-wiese {
+      background-color: #d4e8c2 !important;
+    }
+    .bg-weiss {
+      background-color: #ffffff !important;
+    }
+
+    /* ===== FOTO-HINTERGRÜNDE (fotorealistische Texturen) ===== */
+    .bg-foto-pergament {
+      background-image: url('IMG/Pergament.png') !important;
+      background-size: cover !important;
+      background-position: center !important;
+    }
+    .bg-foto-wiese {
+      background-image: url('IMG/wiese.png') !important;
+      background-size: cover !important;
+      background-position: center !important;
+    }
+    .bg-foto-rost {
+      background-image: url('IMG/Rost.png') !important;
+      background-size: cover !important;
+      background-position: center !important;
+    }
+    .bg-foto-stahl {
+      background-image: url('IMG/stahl.png') !important;
+      background-size: cover !important;
+      background-position: center !important;
+    }
+    .bg-foto-wasser {
+      background-image: url('IMG/Wasser.png') !important;
+      background-size: cover !important;
+      background-position: center !important;
+    }
+
+    /* ===================================================
+       POLAROID-STYLES
+       Ein Polaroid besteht aus:
+       - dem äußeren Rahmen (.polaroid)
+       - dem Foto (.polaroid-foto)
+       - der Beschriftung unten (.polaroid-beschriftung)
+       - dem Dreh-Griff (.polaroid-dreh-griff)
+    =================================================== */
+
+    .polaroid {
+      /* Absolute Positionierung: wird per JavaScript auf der Fläche platziert */
+      position: absolute;
+      touch-action: none; /* Finger-Drag statt Browser-Scroll */
+
+      /* Klassisches Polaroid: warmes Weiß, dicker Rand, noch dicker unten */
+      background: #f8f4ee;
+      padding: 10px 10px 38px 10px; /* oben/seiten 10px, unten 38px für Beschriftung */
+
+      /* Polaroid-typischer Schatten */
+      box-shadow:
+        0 4px 8px rgba(0,0,0,0.18),
+        0 1px 3px rgba(0,0,0,0.12);
+
+      /* Cursor signalisiert: ich bin verschiebbar */
+      cursor: grab;
+
+      /* Sanfte Übergänge für Box-Shadow beim Aktivieren */
+      transition: box-shadow 0.15s ease;
+
+      /* Breite: wird beim Erstellen gesetzt */
+      width: 200px;
+    }
+
+    /* Wenn man das Polaroid gerade zieht */
+    .polaroid.wird-gezogen {
+      cursor: grabbing;
+      box-shadow:
+        0 12px 28px rgba(0,0,0,0.28),
+        0 4px 8px rgba(0,0,0,0.15);
+    }
+
+    /* Das eigentliche Foto */
+    .polaroid-foto {
+      width: 100%;
+      /* Kein erzwungenes Seitenverhältnis — das Foto behält seine natürlichen Proportionen */
+      display: block;
+      /* Leichter Vignetten-Effekt */
+      filter: contrast(1.02) saturate(0.95);
+    }
+
+    /* Beschriftungsbereich: der breite Rand unten */
+    .polaroid-beschriftung {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 38px;
+
+      /* Handschrift-Font für authentisches Polaroid-Feeling */
+      font-family: 'Caveat', cursive;
+      font-size: 15px;
+      color: #4a4035;
+
+      /* Text vertikal zentrieren */
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+
+      /* contenteditable: macht den Bereich direkt editierbar */
+      cursor: text;
+      outline: none;
+
+      /* Verhindert dass Klick auf Beschriftung das Polaroid zieht */
+      pointer-events: all;
+    }
+
+    /* Platzhaltertext für leere Beschriftung */
+    .polaroid-beschriftung:empty::before {
+      content: attr(data-placeholder);
+      color: #ccc;
+      pointer-events: none;
+    }
+
+    /* ===== DREH-GRIFF: oben rechts ===== */
+    .polaroid-dreh-griff {
+      position: absolute;
+      top: -12px;
+      right: -12px;
+      width: 24px;
+      height: 24px;
+      background: #fff;
+      border: 1.5px solid #d0c8bc;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      cursor: crosshair;
+      z-index: 10;
+    }
+
+    /* ===== RESIZE-GRIFF: unten rechts ===== */
+    .polaroid-resize-griff {
+      position: absolute;
+      bottom: -12px;
+      right: -12px;
+      width: 24px;
+      height: 24px;
+      background: #fff;
+      border: 1.5px solid #d0c8bc;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      cursor: nwse-resize; /* Diagonal-Pfeil: signalisiert Größe ändern */
+      z-index: 10;
+    }
+
+    /* Beide Griffe beim Hovern anzeigen */
+    .polaroid:hover .polaroid-dreh-griff,
+    .polaroid:hover .polaroid-resize-griff {
+      opacity: 1;
+    }
+
+    /* Polaroid das gerade aktiv ist (im Vordergrund) */
+    .polaroid.aktiv {
+      outline: 2px solid rgba(100, 140, 200, 0.4);
+      outline-offset: 2px;
+    }
+
+
+    /* ===================================================
+       KLEBEZETTEL-STYLES
+    =================================================== */
+
+    .klebezettel {
+      position: absolute;
+      width: 160px;
+      min-height: 120px;
+      touch-action: none; /* Finger-Drag statt Browser-Scroll */
+      padding: 12px 14px 24px 14px; /* unten mehr Platz wegen geknicktem Eck */
+
+      /* Standard-Farbe: Post-it Gelb */
+      background: #fff176;
+
+      /* Post-it-typischer Schatten */
+      box-shadow:
+        2px 3px 8px rgba(0,0,0,0.15),
+        0 1px 2px rgba(0,0,0,0.08);
+
+      cursor: grab;
+      transition: box-shadow 0.15s ease;
+
+      /* Das geknickte Eck entsteht durch clip-path + ::after */
+      /* Wir lösen es mit einem pseudo-element-Dreieck unten rechts */
+      position: absolute;
+    }
+
+    .klebezettel.wird-gezogen {
+      cursor: grabbing;
+      box-shadow:
+        6px 10px 20px rgba(0,0,0,0.22),
+        0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    /* Das geknickte Eck unten rechts — klassischer Post-it-Trick */
+    /* ::before erzeugt ein Dreieck das die echte Ecke überdeckt */
+    .klebezettel::before {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 24px;
+      height: 24px;
+      /* Das Dreieck: weißes Dreieck über der Ecke */
+      background: linear-gradient(
+        225deg,
+        rgba(255,255,255,0.9) 50%,
+        rgba(0,0,0,0.08) 50%
+      );
+      box-shadow: -1px -1px 3px rgba(0,0,0,0.08);
+    }
+
+    /* Drag-Griff oben am Klebezettel — auf Mobile der einzige Zieh-Punkt */
+    .klebezettel-griff {
+      width: 100%;
+      height: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+      touch-action: none;
+      margin-bottom: 4px;
+      opacity: 0.35;
+      user-select: none;
+      letter-spacing: 3px;
+      font-size: 10px;
+      color: #555;
+    }
+    .klebezettel-griff:active { cursor: grabbing; }
+    /* Auf Mobile etwas prominenter */
+    @media (max-width: 768px) {
+      .klebezettel-griff { opacity: 0.55; height: 18px; font-size: 12px; }
+    }
+
+    /* Der editierbare Textbereich */
+    .klebezettel-text {
+      width: 100%;
+      font-family: 'Caveat', cursive;
+      font-size: 16px;
+      line-height: 1.5;
+      color: #333;
+      outline: none;
+      cursor: text;
+      word-break: break-word;
+      /* min-height damit der Zettel nicht zusammenfällt wenn leer */
+      min-height: 80px;
+    }
+
+    .klebezettel-text:empty::before {
+      content: attr(data-placeholder);
+      color: rgba(0,0,0,0.25);
+      pointer-events: none;
+    }
+
+    /* ===== FARB-PUNKTE: erscheinen beim Hovern ===== */
+    .klebezettel-farben {
+      position: absolute;
+      top: -28px;
+      left: 0;
+      display: flex;
+      gap: 5px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      pointer-events: none; /* wird beim Hover aktiviert */
+    }
+
+    /* Hover wird jetzt per JavaScript gesteuert (siehe zettelHoverMachen) */
+
+    .farb-punkt {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 1.5px solid rgba(0,0,0,0.12);
+      transition: transform 0.1s ease;
+    }
+
+    .farb-punkt:hover {
+      transform: scale(1.2);
+    }
+
+    /* ===== LÖSCHEN-KNOPF: erscheint beim Hovern ===== */
+    .klebezettel-loeschen {
+      position: absolute;
+      top: -10px;
+      right: -10px;
+      width: 20px;
+      height: 20px;
+      background: #ff6b6b;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 10;
+      line-height: 1;
+    }
+
+    /* Hover wird jetzt per JavaScript gesteuert */
+
+    .klebezettel-loeschen:hover {
+      background: #ff4444;
+      transform: scale(1.1);
+    }
+
+    /* ===== FARB-VARIANTEN ===== */
+    .klebezettel.farbe-gelb  { background: #fff176; }
+    .klebezettel.farbe-rosa  { background: #f8bbd0; }
+    .klebezettel.farbe-mint  { background: #c8e6c9; }
+    .klebezettel.farbe-blau  { background: #bbdefb; }
+
+
+    /* ===================================================
+       STEMPEL-PANEL (Auswahl-Leiste neben der Sidebar)
+    =================================================== */
+
+    .stempel-panel {
+      position: absolute;
+      right: 72px;
+      top: 0;
+      bottom: 0;
+      width: 152px;
+      background: #fff;
+      border-left: 1px solid #e0d8cc;
+      padding: 16px 12px;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+      z-index: 100;
+      box-shadow: -4px 0 12px rgba(0,0,0,0.06);
+    }
+
+    .stempel-panel.sichtbar { display: flex; }
+
+    .stempel-panel-titel {
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #aaa;
+      margin-bottom: 4px;
+    }
+
+    .stempel-raster {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .stempel-vorschau {
+      aspect-ratio: 1;
+      border: 1.5px solid #e8e2da;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 12px;
+      color: #bbb;
+      transition: all 0.15s ease;
+      background: #fafaf8;
+    }
+
+    .stempel-vorschau:hover {
+      border-color: #c4b8aa;
+      background: #f5f0ea;
+      color: #555;
+      transform: scale(1.06);
+    }
+
+    .stempel-vorschau svg { width: 100%; height: 100%; }
+
+    /* ===== STEMPEL AUF DER FLÄCHE ===== */
+
+    .stempel-element {
+      position: absolute;
+      width: 80px;
+      height: 80px;
+      cursor: grab;
+      opacity: 0.88;
+      touch-action: none;
+    }
+
+    .stempel-element.wird-gezogen { cursor: grabbing; }
+
+    .stempel-element svg { width: 100%; height: 100%; }
+    .stempel-element img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+
+    .stempel-dreh-griff {
+      position: absolute;
+      top: -12px;
+      right: -12px;
+      width: 22px;
+      height: 22px;
+      background: #fff;
+      border: 1.5px solid #d0c8bc;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      cursor: crosshair;
+      z-index: 10;
+    }
+
+    .stempel-loeschen {
+      position: absolute;
+      top: -10px;
+      left: -10px;
+      width: 20px;
+      height: 20px;
+      background: #ff6b6b;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      cursor: pointer;
+      z-index: 10;
+    }
+
+    .stempel-farben {
+      position: absolute;
+      bottom: -28px;
+      left: 0;
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      pointer-events: none;
+    }
+
+    /* Resize-Griff: unten rechts */
+    .stempel-resize-griff {
+      position: absolute;
+      bottom: -12px;
+      right: -12px;
+      width: 22px;
+      height: 22px;
+      background: #fff;
+      border: 1.5px solid #d0c8bc;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      cursor: nwse-resize;
+      z-index: 10;
+    }
+
+    .stempel-element:hover .stempel-dreh-griff,
+    .stempel-element:hover .stempel-loeschen,
+    .stempel-element:hover .stempel-resize-griff {
+      opacity: 1;
+    }
+
+
+    /* ===================================================
+       HINTERGRUND-PANEL
+    =================================================== */
+
+    .hintergrund-panel {
+      position: absolute;
+      right: 72px;
+      top: 0;
+      bottom: 0;
+      width: 152px;
+      background: #fff;
+      border-left: 1px solid #e0d8cc;
+      padding: 16px 12px;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+      z-index: 100;
+      box-shadow: -4px 0 12px rgba(0,0,0,0.06);
+    }
+
+    .hintergrund-panel.sichtbar { display: flex; }
+
+    .hintergrund-panel-titel {
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #aaa;
+      margin-bottom: 2px;
+    }
+
+    /* Eine Hintergrund-Option: Swatch + Label */
+    .hintergrund-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1.5px solid transparent;
+      transition: all 0.15s ease;
+    }
+
+    .hintergrund-option:hover {
+      background: #f8f5f0;
+      border-color: #e0d8cc;
+    }
+
+    /* Aktiver Hintergrund: blau umrandet */
+    .hintergrund-option.aktiv {
+      border-color: #8ab0d4;
+      background: #f0f5fa;
+    }
+
+    /* Der Farbvorschau-Kasten */
+    .hintergrund-swatch {
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      border: 1px solid rgba(0,0,0,0.08);
+      flex-shrink: 0;
+    }
+
+    .hintergrund-label {
+      font-size: 13px;
+      color: #555;
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* ===================================================
+       TEXT-ELEMENT AUF DER FLÄCHE
+    =================================================== */
+
+    .text-element {
+      position: absolute;
+      min-width: 80px;
+      max-width: 400px;
+      cursor: default;
+      touch-action: none;
+    }
+
+    /* Schmaler Drag-Streifen oben: nur hier wird gezogen */
+    .text-drag-strip {
+      height: 10px;
+      margin-bottom: 2px;
+      cursor: grab;
+      /* Dezente Andeutung: kleiner gepunkteter Balken */
+      background: repeating-linear-gradient(
+        90deg,
+        rgba(0,0,0,0.12) 0px, rgba(0,0,0,0.12) 3px,
+        transparent 3px, transparent 7px
+      );
+      border-radius: 2px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .text-drag-strip:active { cursor: grabbing; }
+
+    .text-element:hover .text-drag-strip { opacity: 1; }
+
+    /* Der eigentliche Textinhalt */
+    .text-inhalt {
+      outline: none;
+      word-break: break-word;
+      white-space: pre-wrap;
+      /* Standardwerte — werden per JS gesetzt */
+      font-size: 22px;
+      font-family: 'Playfair Display', serif;
+      color: #2c2c2c;
+      line-height: 1.4;
+      cursor: text;
+      /* Dünne Linie unten als Orientierung beim Tippen, verschwindet nach Auswahl */
+      border-bottom: 1px dashed transparent;
+      transition: border-color 0.2s;
+    }
+
+    .text-inhalt:focus {
+      border-bottom-color: rgba(0,0,0,0.12);
+    }
+
+    /* Echtes Bold: dickere Striche + minimal größer */
+    .text-inhalt strong,
+    .text-inhalt b {
+      font-weight: 700;
+      /* -webkit-text-stroke macht die Buchstabenkontur breiter —
+         wie stärkerer Tintendruck, wirkt besonders bei Handschrift-Fonts */
+      -webkit-text-stroke: 0.4px currentColor;
+      font-size: 1.08em;
+    }
+
+    .text-inhalt:empty::before {
+      content: attr(data-placeholder);
+      color: rgba(0,0,0,0.2);
+      pointer-events: none;
+    }
+
+    /* ===== TOOLBAR: erscheint über dem Text beim Hovern ===== */
+    .text-toolbar {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: #fff;
+      border: 1px solid #e0d8cc;
+      border-radius: 8px;
+      padding: 5px 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      white-space: nowrap;
+      z-index: 20;
+    }
+
+    /* Toolbar per JS eingeblendet (gleicher Timer-Trick) */
+
+    /* Schriftart-Buttons */
+    .text-font-btn {
+      padding: 3px 7px;
+      border-radius: 5px;
+      border: 1.5px solid #e8e2da;
+      cursor: pointer;
+      font-size: 13px;
+      color: #666;
+      background: #fafaf8;
+      transition: all 0.12s ease;
+      line-height: 1.3;
+    }
+
+    .text-font-btn:hover,
+    .text-font-btn.aktiv {
+      background: #f0ede8;
+      border-color: #c4b8aa;
+      color: #333;
+    }
+
+    /* Trennstrich in der Toolbar */
+    .text-toolbar-sep {
+      width: 1px;
+      height: 18px;
+      background: #e0d8cc;
+      margin: 0 2px;
+    }
+
+    /* Größen-Buttons */
+    .text-groesse-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 5px;
+      border: 1.5px solid #e8e2da;
+      cursor: pointer;
+      font-size: 14px;
+      color: #666;
+      background: #fafaf8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.12s ease;
+      user-select: none;
+    }
+
+    .text-groesse-btn:hover {
+      background: #f0ede8;
+      border-color: #c4b8aa;
+      color: #333;
+    }
+
+    /* Farb-Punkte in der Toolbar (etwas kleiner) */
+    .text-farb-punkt {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 1.5px solid rgba(0,0,0,0.12);
+      transition: transform 0.1s ease;
+      flex-shrink: 0;
+    }
+
+    .text-farb-punkt:hover { transform: scale(1.2); }
+
+    /* Löschen-Knopf in der Toolbar */
+    .text-loeschen-btn {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #ff6b6b;
+      color: white;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      transition: background 0.12s ease;
+    }
+
+    .text-loeschen-btn:hover { background: #ff4444; }
+
+    /* Rotate-Griff: rechts neben der Toolbar */
+    .text-dreh-griff {
+      position: absolute;
+      top: -12px;
+      right: -12px;
+      width: 22px;
+      height: 22px;
+      background: #fff;
+      border: 1.5px solid #d0c8bc;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      cursor: crosshair;
+      z-index: 10;
+    }
+
+    .text-element:hover .text-dreh-griff { opacity: 1; }
+
+    /* Resize-Griff: unten rechts */
+    .text-resize-griff {
+      position: absolute;
+      bottom: -12px;
+      right: -12px;
+      width: 22px;
+      height: 22px;
+      background: #fff;
+      border: 1.5px solid #d0c8bc;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      cursor: nwse-resize;
+      z-index: 10;
+    }
+
+    .text-element:hover .text-resize-griff { opacity: 1; }
+
+
+    /* ===================================================
+       SIDEBAR-BUTTONS: Speichern / Laden / Versiegeln
+    =================================================== */
+
+    .sidebar-tool.speichern:hover  { color: #2471a3; border-color: #aad0e8; background: #f0f7fc; }
+    .sidebar-tool.laden:hover      { color: #1e8449; border-color: #aadbc0; background: #f0faf4; }
+    .sidebar-tool.versiegeln:hover { color: #8b3a2a; border-color: #e8c0b0; background: #fcf4f0; }
+
+    /* Drive-Button: grau = nicht verbunden, grün = verbunden */
+    .sidebar-tool.drive-verbinden:hover { color: #1565c0; border-color: #90caf9; background: #e3f2fd; }
+    .sidebar-tool.drive-verbunden       { color: #2e7d32; border-color: #a5d6a7; background: #f1f8f2; }
+    .sidebar-tool.drive-verbunden:hover { color: #1b5e20; border-color: #81c784; background: #e8f5e9; }
+
+    /* ===================================================
+       VERSIEGELN-MODAL
+    =================================================== */
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    .modal-overlay.sichtbar {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .modal {
+      background: #fff;
+      border-radius: 14px;
+      padding: 32px 28px 24px;
+      max-width: 380px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      text-align: center;
+      transform: scale(0.94);
+      transition: transform 0.2s ease;
+    }
+
+    .modal-overlay.sichtbar .modal { transform: scale(1); }
+
+    .modal-siegel {
+      font-size: 40px;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    .modal-titel {
+      font-family: 'Playfair Display', serif;
+      font-size: 20px;
+      color: #2c2c2c;
+      margin-bottom: 12px;
+    }
+
+    .modal-text {
+      font-size: 14px;
+      color: #666;
+      line-height: 1.7;
+      margin-bottom: 28px;
+    }
+
+    .modal-text strong { color: #8b3a2a; }
+
+    .modal-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    .modal-btn {
+      padding: 10px 24px;
+      border-radius: 8px;
+      border: none;
+      font-size: 14px;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .modal-btn.abbrechen {
+      background: #f0ede8;
+      color: #555;
+    }
+    .modal-btn.abbrechen:hover { background: #e0dcd6; }
+
+    .modal-btn.bestaetigen {
+      background: #8b3a2a;
+      color: #fff;
+    }
+    .modal-btn.bestaetigen:hover { background: #6e2d1f; }
+
+
+    /* ===================================================
+       VERSIEGELTE SEITE: alles wird unantastbar
+    =================================================== */
+
+    /* Alle interaktiven Elemente deaktivieren */
+    body.versiegelt .polaroid,
+    body.versiegelt .klebezettel,
+    body.versiegelt .stempel-element,
+    body.versiegelt .text-element {
+      pointer-events: none !important;
+      cursor: default !important;
+    }
+
+    body.versiegelt .reflection-input {
+      pointer-events: none;
+      color: #555;
+    }
+
+    body.versiegelt .sidebar-tool:not(.laden):not(#btn-archiv):not(#btn-drive) {
+      opacity: 0.3;
+      pointer-events: none;
+    }
+
+    /* Siegel-Badge in der Seite */
+    .siegel-badge {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(139, 58, 42, 0.9);
+      color: #fff;
+      border-radius: 50%;
+      width: 72px;
+      height: 72px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-family: 'Inter', sans-serif;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      text-align: center;
+      line-height: 1.4;
+      box-shadow: 0 2px 12px rgba(139,58,42,0.4);
+      z-index: 50;
+      transform: rotate(-12deg);
+    }
+
+    .siegel-badge-icon { font-size: 20px; margin-bottom: 2px; }
+
+    /* ===== BOHNENHAUFEN — schöne Momente des Tages ===== */
+    .bohnen-anzeige {
+      position: absolute;
+      bottom: 18px;
+      left: 18px;
+      z-index: 5;
+      pointer-events: none;
+      user-select: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center; /* Zähler zentriert über dem Haufen */
+    }
+
+    .bohnen-zaehler {
+      font-family: 'Caveat', cursive;
+      font-size: 17px;
+      font-weight: 600;
+      color: #5c3d1e;
+      text-align: center;
+      line-height: 1;
+      margin-bottom: 3px;
+      text-shadow: 0 1px 2px rgba(255,255,255,0.7);
+    }
+
+    .bohnen-haufen {
+      /* Größe wird dynamisch per JS gesetzt (wächst mit der Anzahl) */
+      position: relative;
+    }
+
+    .bohne {
+      position: absolute;
+      display: block;
+      /* Position, Rotation, z-index werden per JS gesetzt */
+    }
+
+    /* Sidebar-Bohnen-Button: leichtes Pulsieren nach dem Klick */
+    #btn-bohne.gepulst {
+      animation: bohne-puls 0.35s ease-out;
+    }
+
+    @keyframes bohne-puls {
+      0%   { transform: scale(1); }
+      45%  { transform: scale(1.35); }
+      100% { transform: scale(1); }
+    }
+
+
+    /* ===================================================
+       ARCHIV — BUCH-ANSICHT MIT PAGE FLIP
+    =================================================== */
+
+    .archiv-overlay {
+      position: fixed;
+      inset: 0;
+      background: #1a1410;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 500;
+    }
+
+    .archiv-overlay.sichtbar { display: flex; }
+
+    /* Schließen-Knopf */
+    .archiv-schliessen {
+      position: absolute;
+      top: 20px;
+      right: 24px;
+      background: none;
+      border: 1.5px solid rgba(255,255,255,0.2);
+      color: rgba(255,255,255,0.6);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .archiv-schliessen:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+    /* Dateien-Laden Button (wenn noch keine Seiten geladen) */
+    .archiv-leer {
+      text-align: center;
+      color: rgba(255,255,255,0.5);
+    }
+    .archiv-leer p { margin-bottom: 20px; font-size: 15px; }
+    .archiv-laden-btn {
+      background: rgba(255,255,255,0.1);
+      border: 1.5px solid rgba(255,255,255,0.25);
+      color: rgba(255,255,255,0.8);
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .archiv-laden-btn:hover { background: rgba(255,255,255,0.18); color: #fff; }
+
+    /* Buch-Szene: enthält Pfeile + Buch */
+    .buch-szene {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    /* Blätter-Pfeile */
+    .blaettern-btn {
+      background: none;
+      border: 1.5px solid rgba(255,255,255,0.2);
+      color: rgba(255,255,255,0.5);
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      font-size: 22px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .blaettern-btn:hover:not(:disabled) { background: rgba(255,255,255,0.12); color: #fff; }
+    .blaettern-btn:disabled { opacity: 0.2; cursor: default; }
+
+    /* Das Buch: perspective + zwei Seiten nebeneinander */
+    .buch {
+      position: relative;
+      display: flex;
+      /* Perspektive für 3D-Effekt */
+      perspective: 2000px;
+      /* Buchschatten */
+      filter: drop-shadow(0 20px 60px rgba(0,0,0,0.7));
+    }
+
+    /* Eine einzelne Buchseite — Seitenverhältnis an Canvas (750×1060 = ca. 7:10) */
+    /* Um exaktes Seitenverhältnis zu gewährleisten: Breite basierend auf Höhe berechnen */
+    .buch-seite {
+      width: min(44vw, 580px);
+      height: calc(min(44vw, 580px) * (1060 / 750));
+      background: #fdfaf5;
+      padding: 28px 24px 24px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Buchbund in der Mitte */
+    .buch-seite.links {
+      border-radius: 4px 0 0 4px;
+      box-shadow: inset -4px 0 8px rgba(0,0,0,0.08);
+    }
+    .buch-seite.rechts {
+      border-radius: 0 4px 4px 0;
+      box-shadow: inset 4px 0 8px rgba(0,0,0,0.08);
+      cursor: pointer;
+    }
+    .buch-seite.rechts:hover { filter: brightness(0.97); }
+
+    /* Buchbund-Schatten zwischen den Seiten */
+    .buch::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 0; bottom: 0;
+      width: 2px;
+      transform: translateX(-50%);
+      background: linear-gradient(90deg, rgba(0,0,0,0.12), rgba(0,0,0,0.06), rgba(0,0,0,0.12));
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    /* ===== FLIP-SEITE: die animierte Seite =====
+       Sie liegt über der rechten (oder linken) Seite
+       und dreht sich beim Blättern */
+    .flip-seite {
+      position: absolute;
+      top: 0;
+      width: min(44vw, 580px);
+      height: calc(min(44vw, 580px) * (1060 / 750));
+      transform-style: preserve-3d;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    .flip-seite.flip-vorwärts {
+      left: min(44vw, 580px); /* rechte Seite */
+      transform-origin: left center;
+      animation: flipVor 0.65s ease forwards;
+    }
+
+    .flip-seite.flip-rückwärts {
+      left: 0;
+      transform-origin: right center;
+      animation: flipZurueck 0.65s ease forwards;
+    }
+
+    @keyframes flipVor {
+      0%   { transform: rotateY(0deg); }
+      100% { transform: rotateY(-180deg); }
+    }
+
+    @keyframes flipZurueck {
+      0%   { transform: rotateY(0deg); }
+      100% { transform: rotateY(180deg); }
+    }
+
+    /* Vorder- und Rückseite der Flip-Seite */
+    .flip-vorder,
+    .flip-rueck {
+      position: absolute;
+      inset: 0;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      background: #fdfaf5;
+      padding: 32px 28px 28px;
+      overflow: hidden;
+    }
+
+    .flip-vorder { border-radius: 0 4px 4px 0; }
+
+    /* Rückseite: um 180° vorgekippt, damit sie beim Flip sichtbar wird */
+    .flip-rueck {
+      transform: rotateY(180deg);
+      border-radius: 4px 0 0 4px;
+      box-shadow: inset -4px 0 8px rgba(0,0,0,0.08);
+    }
+
+    /* ===== SEITEN-INHALT (Vorschau einer Tagebuchseite) ===== */
+
+    .seite-datum {
+      font-family: 'Playfair Display', serif;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #999;
+      margin-bottom: 8px;
+    }
+
+    .seite-tagessatz {
+      font-family: 'Playfair Display', serif;
+      font-size: 14px;
+      font-style: italic;
+      color: #444;
+      line-height: 1.5;
+      margin-bottom: 16px;
+      border-bottom: 1px solid #e8e2da;
+      padding-bottom: 14px;
+    }
+
+    /* Vorschau-Fläche: zeigt die Hintergrundfarbe + Element-Indikatoren */
+    .seite-vorschau-flaeche {
+      flex: 1 1 0;   /* flex:1 aber mit basis:0 → darf schrumpfen */
+      min-height: 0; /* verhindert dass Flex-Items nicht unter ihre Content-Größe schrumpfen */
+      border-radius: 4px;
+      margin-bottom: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 12px;
+      color: rgba(0,0,0,0.3);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .seite-element-zaehler {
+      display: flex;
+      gap: 10px;
+      font-size: 13px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .seite-reflexion {
+      flex: 0 0 auto;     /* fester Flex-Teilnehmer — bekommt seinen Platz */
+      max-height: 68px;   /* ~3 Zeilen bei 1.5 line-height und 11px font */
+      font-size: 11px;
+      color: #888;
+      font-style: italic;
+      line-height: 1.5;
+      border-top: 1px solid #e8e2da;
+      padding-top: 10px;
+      overflow: hidden;   /* Text wird nach 3 Zeilen einfach abgeschnitten */
+    }
+
+    /* Leere Reflexion: noch dezenter */
+    .seite-reflexion-leer {
+      opacity: 0.35;
+    }
+
+    .seite-reflexion-label {
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #aaa;
+      font-style: normal;
+      margin-bottom: 4px;
+    }
+
+    /* Versiegelt-Badge auf der Archiv-Seite */
+    .seite-siegel {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(139,58,42,0.85);
+      color: white;
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    /* Leere Seite (wenn ungerade Anzahl) */
+    .buch-seite.leer {
+      background: #f5f0e8;
+    }
+
+    /* Seitenzahl unten */
+    .archiv-seitenzahl {
+      margin-top: 20px;
+      color: rgba(255,255,255,0.35);
+      font-size: 13px;
+      font-family: 'Inter', sans-serif;
+      letter-spacing: 0.08em;
+    }
+
+    /* Seiten zum Laden hinzufügen (dauerhaft sichtbar im Archiv) */
+    .archiv-hinzufuegen {
+      margin-top: 14px;
+    }
+
+
+    /* =====================================================
+       MOBILE — alles unter 768px
+       Kein Archiv, kein Stempel, kein Fließtext.
+       Nur: Bohnen, Klebezettel, Polaroid.
+    ===================================================== */
+    @media (max-width: 768px) {
+
+      /* Kein Scroll auf der ganzen Seite */
+      body { overflow: hidden; }
+
+      /* Header etwas kompakter */
+      .page-header {
+        padding: 10px 16px 8px;
+      }
+      .page-date  { font-size: 11px; }
+      .page-quote { font-size: 14px; line-height: 1.4; }
+
+      /* Reflexion etwas kleiner */
+      .reflection-area { padding: 8px 16px; }
+      .reflection-input { height: 38px; font-size: 13px; }
+
+      /* Desktop-Sidebar ausblenden */
+      .sidebar { display: none !important; }
+
+      /* Mobile Bottom-Bar einblenden */
+      .mobile-bar { display: flex !important; }
+    }
+
+    /* ===== MOBILE BOTTOM-BAR ===== */
+    /* Standardmäßig ausgeblendet, auf Mobile per Media Query aktiviert */
+    .mobile-bar {
+      display: none;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: 68px;
+      background: #fff;
+      border-top: 1px solid #e0d8cc;
+      align-items: center;
+      justify-content: space-around;
+      padding: 0 24px;
+      z-index: 200;
+      /* Safe area für iPhone mit Notch */
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    .mobile-bar-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      cursor: pointer;
+      padding: 8px 16px;
+      border-radius: 12px;
+      border: none;
+      background: transparent;
+      color: #999;
+      font-size: 11px;
+      font-family: 'Inter', sans-serif;
+      letter-spacing: 0.04em;
+      transition: all 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .mobile-bar-btn:active {
+      background: #f0ebe3;
+      color: #555;
+      transform: scale(0.94);
+    }
+
+    .mobile-bar-btn .mobile-icon {
+      font-size: 26px;
+      line-height: 1;
+    }
+
+    /* Bohnen-Button in der Bar: etwas prominenter */
+    .mobile-bar-btn.bohne-btn .mobile-icon {
+      font-size: 30px;
+    }
+
+    /* Drive-Button verbunden: grüner Text */
+    .mobile-bar-btn.drive-verbunden {
+      color: #2e7d32;
+    }
+
+    /* Auf Mobile: Canvas-Bereich braucht Platz für die Bottom-Bar */
+    @media (max-width: 768px) {
+      .app-container {
+        padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+      }
+    }
+
+  </style>
+</head>
+<body>
+
+  <!-- Versteckte Inputs -->
+  <input type="file" id="foto-input"    accept="image/*" style="display:none">
+  <input type="file" id="laden-input"   accept=".json"   style="display:none">
+  <input type="file" id="archiv-input"  accept=".json"   style="display:none" multiple>
+
+  <!-- ===== ARCHIV-OVERLAY ===== -->
+  <div class="archiv-overlay" id="archiv-overlay">
+    <button class="archiv-schliessen" id="archiv-schliessen">✕</button>
+
+    <!-- Leer-Zustand: noch keine Seiten geladen -->
+    <div class="archiv-leer" id="archiv-leer">
+      <p>Noch keine Tagebuchseiten geladen.</p>
+      <button class="archiv-laden-btn" id="archiv-dateien-btn">📂 Journal-Dateien auswählen</button>
+    </div>
+
+    <!-- Buch-Ansicht: erscheint sobald Seiten geladen sind -->
+    <div class="buch-szene" id="buch-szene" style="display:none">
+
+      <button class="blaettern-btn" id="btn-zurueck" disabled>‹</button>
+
+      <div style="display:flex; flex-direction:column; align-items:center; gap:0">
+        <div class="buch" id="buch">
+          <!-- Linke Seite -->
+          <div class="buch-seite links" id="seite-links"></div>
+          <!-- Flip-Seite (animiert, liegt darüber) -->
+          <div class="flip-seite" id="flip-seite" style="display:none">
+            <div class="flip-vorder" id="flip-vorder"></div>
+            <div class="flip-rueck"  id="flip-rueck"></div>
+          </div>
+          <!-- Rechte Seite -->
+          <div class="buch-seite rechts" id="seite-rechts"></div>
+        </div>
+
+        <div class="archiv-seitenzahl" id="archiv-seitenzahl"></div>
+        <button class="archiv-laden-btn archiv-hinzufuegen" id="archiv-mehr-laden">+ Weitere Seiten laden</button>
+      </div>
+
+      <button class="blaettern-btn" id="btn-vor">›</button>
+
+    </div>
+  </div>
+
+  <!-- Versiegeln-Modal -->
+  <div class="modal-overlay" id="versiegeln-modal">
+    <div class="modal">
+      <span class="modal-siegel">🔒</span>
+      <div class="modal-titel">Seite versiegeln?</div>
+      <div class="modal-text">
+        Diese Seite wird als <strong>unveränderliche Zeitkapsel</strong> gespeichert.<br><br>
+        Du kannst sie danach noch ansehen — aber nie wieder bearbeiten.<br>
+        <strong>Dieser Vorgang ist unwiderruflich.</strong>
+      </div>
+      <div class="modal-buttons">
+        <button class="modal-btn abbrechen"   id="modal-abbrechen">Abbrechen</button>
+        <button class="modal-btn bestaetigen" id="modal-bestaetigen">Versiegeln</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hintergrund-Panel: erscheint links neben der Sidebar -->
+  <div class="hintergrund-panel" id="hintergrund-panel">
+    <div class="hintergrund-panel-titel">Hintergrund</div>
+    <!-- wird per JavaScript befüllt -->
+  </div>
+
+  <!-- Stempel-Panel: erscheint links neben der Sidebar -->
+  <div class="stempel-panel" id="stempel-panel">
+    <div class="stempel-panel-titel">Stempel</div>
+    <div class="stempel-raster" id="stempel-raster">
+      <!-- wird per JavaScript befüllt -->
+    </div>
+  </div>
+
+  <div class="app-container">
+
+    <!-- ===== JOURNAL-SEITE ===== -->
+    <div class="journal-page">
+
+      <div class="page-header">
+        <div class="page-date" id="datum"></div>
+        <div class="page-quote" id="tagessatz"></div>
+      </div>
+
+      <div class="design-surface">
+        <div id="flaeche">
+        <div class="design-surface-hint" id="hinweis">
+          <span style="font-size: 32px;">✦</span>
+          <p>Deine Seite wartet.</p>
+        </div>
+        </div><!-- /#flaeche -->
+      </div><!-- /.design-surface -->
+
+      <div class="reflection-area">
+        <div class="reflection-label">Was habe ich heute mitgenommen?</div>
+        <textarea class="reflection-input" id="reflexion" placeholder="Schreib hier…"></textarea>
+      </div>
+
+    </div>
+
+    <!-- ===== SIDEBAR ===== -->
+    <div class="sidebar">
+
+      <!-- Bohnen-Button: schöner Moment zählen -->
+      <div class="sidebar-tool" id="btn-bohne" title="Schöner Moment 🫘">🫘</div>
+
+      <div class="sidebar-divider"></div>
+
+      <!-- Polaroid-Button: löst den Datei-Dialog aus -->
+      <div class="sidebar-tool" id="btn-polaroid" title="Polaroid hinzufügen">🖼️</div>
+
+      <div class="sidebar-tool" id="btn-klebezettel" title="Klebezettel">📝</div>
+      <div class="sidebar-tool" id="btn-text" title="Text hinzufügen" style="font-family: 'Playfair Display', serif; font-size:16px; color:#bbb;">T</div>
+      <div class="sidebar-tool" id="btn-stempel" title="Stempel">🔖</div>
+
+      <div class="sidebar-divider"></div>
+
+      <div class="sidebar-tool" id="btn-hintergrund" title="Hintergrund wechseln">🎨</div>
+
+      <div class="sidebar-divider"></div>
+
+      <div class="sidebar-tool drive-verbinden" id="btn-drive"    title="Mit Google Drive verbinden">☁️</div>
+
+      <div class="sidebar-tool speichern" id="btn-speichern"  title="Speichern">💾</div>
+      <div class="sidebar-tool laden"     id="btn-laden"      title="Laden">📂</div>
+      <div class="sidebar-tool versiegeln" id="btn-versiegeln" title="Versiegeln">🔒</div>
+      <div class="sidebar-tool"           id="btn-archiv"     title="Archiv">📖</div>
+
+    </div>
+
+  </div>
+
+  <!-- ===== MOBILE BOTTOM-BAR ===== -->
+  <!-- Nur auf Handys sichtbar (CSS media query). Kein Archiv, kein Stempel, kein Text. -->
+  <nav class="mobile-bar" id="mobile-bar">
+    <button class="mobile-bar-btn bohne-btn" id="mobile-btn-bohne" title="Schöner Moment">
+      <span class="mobile-icon">🫘</span>
+      <span>Moment</span>
+    </button>
+    <button class="mobile-bar-btn" id="mobile-btn-klebezettel" title="Klebezettel">
+      <span class="mobile-icon">📝</span>
+      <span>Notiz</span>
+    </button>
+    <button class="mobile-bar-btn" id="mobile-btn-polaroid" title="Foto">
+      <span class="mobile-icon">🖼️</span>
+      <span>Foto</span>
+    </button>
+    <!-- Drive-Button: verbindet mit Google Drive (einmalig), danach speichert 💾 direkt dort -->
+    <button class="mobile-bar-btn mobile-drive-btn" id="mobile-btn-drive" title="Mit Google Drive verbinden">
+      <span class="mobile-icon" id="mobile-drive-icon">☁️</span>
+      <span id="mobile-drive-label">Drive</span>
+    </button>
+    <button class="mobile-bar-btn" id="mobile-btn-speichern" title="Speichern">
+      <span class="mobile-icon" id="mobile-speichern-icon">💾</span>
+      <span>Speichern</span>
+    </button>
+  </nav>
+
+
+  <script>
+
+    // ===== KANONISCHE CANVAS-GRÖSSE =====
+    // Die Originalgröße der Gestaltungsfläche (#flaeche) ist 750×1060px.
+    // Die Archiv-Vorschau berechnet dynamisch die verfügbare Größe und skaliert passend.
+    // Wichtig: Das Seitenverhältnis muss in beiden Ansichten konsistent sein!
+    const CANVAS_BREITE = 750;
+    const CANVAS_HOEHE  = 1060;
+    let canvasScale = 1;
+
+    // ===== BOHNENZÄHLER =====
+    // Zählt schöne Momente des Tages — eine Bohne pro Klick
+    let bohnenAnzahl = 0;
+
+    function canvasAnpassen() {
+      const wrapper  = document.querySelector('.design-surface');
+      const wBreite  = wrapper.clientWidth  - 40;  // 20px Luft pro Seite
+      const wHoehe   = wrapper.clientHeight - 40;
+      canvasScale = Math.min(wBreite / CANVAS_BREITE, wHoehe / CANVAS_HOEHE, 1);
+      document.getElementById('flaeche').style.transform = `scale(${canvasScale})`;
+    }
+
+    window.addEventListener('resize', canvasAnpassen);
+    // Erster Aufruf nach DOM-Aufbau (kurzes Timeout damit Layout fertig ist)
+    setTimeout(canvasAnpassen, 0);
+
+
+    // ===== DATUM =====
+    function datumAnzeigen() {
+      const heute = new Date();
+      const optionen = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+      document.getElementById('datum').textContent =
+        heute.toLocaleDateString('de-DE', optionen);
+    }
+    datumAnzeigen();
+
+
+    // ===== TAGESSÄTZE =====
+    const tagessaetze = [
+      '„Erwarte ich das Mögliche, oder was ich will?"',
+      '„Was ich nicht kontrollieren kann, muss mich nicht kontrollieren."',
+      '„Jeder Tag ist eine Einladung, nicht nur eine Verpflichtung."',
+      '„Wer keine Zeit hat innezuhalten, hat auch keine Zeit zu leben."',
+      '„Das Hindernis ist der Weg."',
+      '„Handle so, als wäre heute der Tag der Entscheidung."',
+      '„Was wäre, wenn das Unbehagen der Anfang von etwas ist?"',
+      '„Die Stille ist kein Loch. Sie ist ein Raum."',
+      '„Nicht weniger wollen — klarer wollen."',
+      '„Fang dort an, wo du stehst. Mit dem, was du hast."'
+    ];
+
+    function tagessatzAnzeigen() {
+      const i = Math.floor(Math.random() * tagessaetze.length);
+      document.getElementById('tagessatz').textContent = tagessaetze[i];
+    }
+    tagessatzAnzeigen();
+
+
+    // ===== Z-INDEX VERWALTUNG =====
+    // Jedes neu angefasste Element kommt in den Vordergrund
+    let hoechsterZIndex = 10;
+
+    function inVordergrundBringen(element) {
+      hoechsterZIndex++;
+      element.style.zIndex = hoechsterZIndex;
+    }
+
+
+    // ===== HINWEIS AUSBLENDEN =====
+    // Sobald das erste Element auf der Fläche landet, verschwindet der Platzhaltertext
+    function hinweisAusblenden() {
+      const hinweis = document.getElementById('hinweis');
+      if (hinweis) hinweis.style.opacity = '0';
+    }
+
+
+    // ===================================================
+    //  POLAROID ERSTELLEN
+    //  imageDataUrl: das Bild als Data-URL (kommt vom FileReader)
+    // ===================================================
+    function polaroidErstellen(imageDataUrl) {
+      const flaeche = document.getElementById('flaeche');
+
+      // --- Zufällige Startposition berechnen ---
+      // Polaroid soll innerhalb der Fläche landen, nicht am Rand
+      const startX = Math.random() * (CANVAS_BREITE - 240) + 40;
+      const startY = Math.random() * (CANVAS_HOEHE  - 280) + 40;
+
+      // --- Leichte zufällige Drehung: -8° bis +8° ---
+      // Macht es natürlicher, wie hingelegte Fotos
+      const startDrehung = (Math.random() * 16) - 8;
+
+      // --- Das Polaroid-Element aufbauen ---
+      const polaroid = document.createElement('div');
+      polaroid.className = 'polaroid';
+      polaroid.dataset.typ = 'polaroid'; // für Serialisierung
+
+      // Position und Drehung setzen
+      polaroid.style.left = startX + 'px';
+      polaroid.style.top  = startY + 'px';
+      polaroid.style.transform = `rotate(${startDrehung}deg)`;
+
+      // Aktuelle Drehung als Datenpunkt speichern (brauchen wir beim Weiterdrehen)
+      polaroid.dataset.drehung = startDrehung;
+
+      // Das Foto
+      const foto = document.createElement('img');
+      foto.className = 'polaroid-foto';
+      foto.src = imageDataUrl;
+      foto.draggable = false; // Browser soll Bild nicht selbst ziehbar machen
+
+      // Die Beschriftung (editierbarer Text unten)
+      // contenteditable="true" macht ein normales div direkt im Browser editierbar
+      const beschriftung = document.createElement('div');
+      beschriftung.className = 'polaroid-beschriftung';
+      beschriftung.contentEditable = 'true';
+      beschriftung.dataset.placeholder = 'Beschriftung…';
+      beschriftung.spellcheck = false;
+
+      // Der Dreh-Griff (oben rechts)
+      const drehGriff = document.createElement('div');
+      drehGriff.className = 'polaroid-dreh-griff';
+      drehGriff.textContent = '↻';
+      drehGriff.title = 'Drehen';
+
+      // Der Resize-Griff (unten rechts)
+      const resizeGriff = document.createElement('div');
+      resizeGriff.className = 'polaroid-resize-griff';
+      resizeGriff.textContent = '⤡';
+      resizeGriff.title = 'Größe ändern';
+
+      // Alles zusammensetzen
+      polaroid.appendChild(foto);
+      polaroid.appendChild(beschriftung);
+      polaroid.appendChild(drehGriff);
+      polaroid.appendChild(resizeGriff);
+
+      // Auf die Fläche legen
+      flaeche.appendChild(polaroid);
+
+      // Hinweis ausblenden
+      hinweisAusblenden();
+
+      // Interaktivität aktivieren
+      ziehbarMachen(polaroid, beschriftung, drehGriff, resizeGriff);
+      drehbarMachen(polaroid, drehGriff);
+      resizbarMachen(polaroid, resizeGriff);
+
+      // Sofort in den Vordergrund
+      inVordergrundBringen(polaroid);
+    }
+
+
+    // ===================================================
+    //  ZIEHEN (Drag & Drop)
+    //  polaroid: das Polaroid-Element
+    //  beschriftung: das Textfeld (dort soll kein Ziehen starten)
+    //  drehGriff: der Dreh-Knopf (dort auch nicht)
+    // ===================================================
+    function ziehbarMachen(polaroid, beschriftung, drehGriff, resizeGriff) {
+
+      polaroid.addEventListener('pointerdown', (e) => {
+
+        // Nicht ziehen wenn man auf Beschriftung, Dreh-Griff oder Resize-Griff klickt
+        if (e.target === beschriftung || beschriftung.contains(e.target)) return;
+        if (e.target === drehGriff) return;
+        if (e.target === resizeGriff) return;
+
+        e.preventDefault();
+
+        // In den Vordergrund bringen
+        inVordergrundBringen(polaroid);
+        polaroid.classList.add('wird-gezogen');
+
+        // Abstand zwischen Mausklick und Polaroid-Ecke merken
+        // (damit das Polaroid nicht "springt" beim Anfassen)
+        const mausStartX = e.clientX;
+        const mausStartY = e.clientY;
+        const polaroidStartX = parseInt(polaroid.style.left) || 0;
+        const polaroidStartY = parseInt(polaroid.style.top)  || 0;
+
+        // Mausbewegung verfolgen (auf document, nicht nur auf polaroid)
+        function beimZiehen(e) {
+          e.preventDefault(); // verhindert Scroll auf Mobile
+          const deltaX = (e.clientX - mausStartX) / canvasScale;
+          const deltaY = (e.clientY - mausStartY) / canvasScale;
+          polaroid.style.left = (polaroidStartX + deltaX) + 'px';
+          polaroid.style.top  = (polaroidStartY + deltaY) + 'px';
+        }
+
+        // Loslassen (auch pointercancel abfangen: z.B. wenn Benachrichtigung reinkommt)
+        function beimLoslassen() {
+          polaroid.classList.remove('wird-gezogen');
+          document.removeEventListener('pointermove', beimZiehen);
+          document.removeEventListener('pointerup',   beimLoslassen);
+          document.removeEventListener('pointercancel', beimLoslassen);
+        }
+
+        document.addEventListener('pointermove',   beimZiehen,      { passive: false });
+        document.addEventListener('pointerup',     beimLoslassen);
+        document.addEventListener('pointercancel', beimLoslassen);
+      });
+
+      // Auch beim Klick ohne Ziehen: in Vordergrund bringen
+      polaroid.addEventListener('click', (e) => {
+        if (e.target === drehGriff) return;
+        inVordergrundBringen(polaroid);
+      });
+    }
+
+
+    // ===================================================
+    //  DREHEN
+    //  Mathematik: Winkel zwischen Mausposition und Mittelpunkt des Polaroids
+    // ===================================================
+    function drehbarMachen(polaroid, drehGriff) {
+
+      drehGriff.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // Verhindert dass auch das Ziehen startet
+
+        // Mittelpunkt des Polaroids berechnen
+        // getBoundingClientRect() gibt die aktuelle Position im Fenster zurück
+        const rect = polaroid.getBoundingClientRect();
+        const mitteX = rect.left + rect.width  / 2;
+        const mitteY = rect.top  + rect.height / 2;
+
+        // Aktuellen Winkel aus dem data-Attribut lesen
+        let startDrehung = parseFloat(polaroid.dataset.drehung) || 0;
+
+        // Ausgangswinkel der Maus beim Drücken
+        const startWinkelMaus = Math.atan2(
+          e.clientY - mitteY,
+          e.clientX - mitteX
+        ) * (180 / Math.PI); // Umrechnung von Bogenmaß in Grad
+
+        function beimDrehen(e) {
+          // Aktueller Winkel der Maus
+          const aktuellerWinkel = Math.atan2(
+            e.clientY - mitteY,
+            e.clientX - mitteX
+          ) * (180 / Math.PI);
+
+          // Differenz: wie weit hat sich die Maus gedreht?
+          const delta = aktuellerWinkel - startWinkelMaus;
+          const neueDrehung = startDrehung + delta;
+
+          // Transform aktualisieren
+          polaroid.style.transform = `rotate(${neueDrehung}deg)`;
+          polaroid.dataset.drehung = neueDrehung;
+        }
+
+        function beimLoslassen() {
+          document.removeEventListener('pointermove', beimDrehen);
+          document.removeEventListener('pointerup',   beimLoslassen);
+        }
+
+        document.addEventListener('pointermove', beimDrehen);
+        document.addEventListener('pointerup',   beimLoslassen);
+      });
+    }
+
+
+    // ===================================================
+    //  GRÖSSE ÄNDERN (Resize)
+    //  Zieht man den Griff nach rechts → Polaroid wird breiter
+    //  Das Foto skaliert mit (width: 100%), Höhe folgt automatisch
+    // ===================================================
+    function resizbarMachen(polaroid, resizeGriff) {
+
+      resizeGriff.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Startbreite und Mausposition merken
+        const startBreite = polaroid.offsetWidth;
+        const startMausX  = e.clientX;
+
+        function beimResizen(e) {
+          const delta = (e.clientX - startMausX) / canvasScale;
+          // Mindestbreite 100px damit das Polaroid nicht verschwindet
+          const neueBreite = Math.max(100, startBreite + delta);
+          polaroid.style.width = neueBreite + 'px';
+        }
+
+        function beimLoslassen() {
+          document.removeEventListener('pointermove', beimResizen);
+          document.removeEventListener('pointerup',   beimLoslassen);
+        }
+
+        document.addEventListener('pointermove', beimResizen);
+        document.addEventListener('pointerup',   beimLoslassen);
+      });
+    }
+
+
+    // ===================================================
+    //  KLEBEZETTEL ERSTELLEN
+    // ===================================================
+
+    // Die vier verfügbaren Farben: CSS-Klasse + Hex-Farbe für den Farbpunkt
+    const klebezettelFarben = [
+      { klasse: 'farbe-gelb', hex: '#fff176' },
+      { klasse: 'farbe-rosa', hex: '#f8bbd0' },
+      { klasse: 'farbe-mint', hex: '#c8e6c9' },
+      { klasse: 'farbe-blau', hex: '#bbdefb' },
+    ];
+
+    function klebezettelErstellen() {
+      const flaeche = document.getElementById('flaeche');
+
+      // Zufällige Position auf der Fläche
+      const startX = Math.random() * (CANVAS_BREITE - 200) + 40;
+      const startY = Math.random() * (CANVAS_HOEHE  - 180) + 40;
+
+      // Leichte zufällige Drehung: -6° bis +6°
+      const startDrehung = (Math.random() * 12) - 6;
+
+      // ---- Klebezettel-Element aufbauen ----
+      const zettel = document.createElement('div');
+      zettel.className = 'klebezettel farbe-gelb';
+      zettel.dataset.typ = 'klebezettel';
+      zettel.style.left      = startX + 'px';
+      zettel.style.top       = startY + 'px';
+      zettel.style.transform = `rotate(${startDrehung}deg)`;
+      zettel.dataset.drehung = startDrehung;
+
+      // Editierbarer Text
+      const text = document.createElement('div');
+      text.className       = 'klebezettel-text';
+      text.contentEditable = 'true';
+      text.dataset.placeholder = 'Notiz…';
+      text.spellcheck = false;
+
+      // Farb-Punkte (erscheinen beim Hovern)
+      const farbenLeiste = document.createElement('div');
+      farbenLeiste.className = 'klebezettel-farben';
+
+      klebezettelFarben.forEach(farbe => {
+        const punkt = document.createElement('div');
+        punkt.className = 'farb-punkt';
+        punkt.style.background = farbe.hex;
+        punkt.title = farbe.klasse.replace('farbe-', '');
+
+        // Klick auf Farbpunkt: Farbe wechseln
+        punkt.addEventListener('click', (e) => {
+          e.stopPropagation();
+          // Alle Farb-Klassen entfernen, neue setzen
+          klebezettelFarben.forEach(f => zettel.classList.remove(f.klasse));
+          zettel.classList.add(farbe.klasse);
+        });
+
+        farbenLeiste.appendChild(punkt);
+      });
+
+      // Löschen-Knopf
+      const loeschenBtn = document.createElement('div');
+      loeschenBtn.className   = 'klebezettel-loeschen';
+      loeschenBtn.textContent = '×';
+      loeschenBtn.title       = 'Löschen';
+
+      loeschenBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Kleines Ausblend-Animation vor dem Entfernen
+        zettel.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+        zettel.style.opacity    = '0';
+        zettel.style.transform  += ' scale(0.85)';
+        setTimeout(() => zettel.remove(), 200);
+      });
+
+      // Drag-Griff: schmaler Streifen oben, sicher ziehbar auch auf Mobile
+      const griff = document.createElement('div');
+      griff.className = 'klebezettel-griff';
+      griff.textContent = '· · ·';
+      griff.title = 'Ziehen';
+
+      // Zusammensetzen
+      zettel.appendChild(farbenLeiste);
+      zettel.appendChild(loeschenBtn);
+      zettel.appendChild(griff);
+      zettel.appendChild(text);
+
+      flaeche.appendChild(zettel);
+      hinweisAusblenden();
+      inVordergrundBringen(zettel);
+
+      // Ziehbar machen (text und Buttons ausklammern; griff übergeben)
+      zettelZiehbarMachen(zettel, text, loeschenBtn, farbenLeiste, griff);
+
+      // Hover-Logik: Farbleiste + Löschen-Knopf per JS steuern
+      zettelHoverMachen(zettel, farbenLeiste, loeschenBtn);
+
+      // Direkt in Bearbeitungsmodus springen
+      setTimeout(() => text.focus(), 50);
+    }
+
+
+    // Zieh-Logik für Klebezettel
+    // griff = der schmale Drag-Streifen oben (immer ziehbar, auch auf Mobile)
+    function zettelZiehbarMachen(zettel, text, loeschenBtn, farbenLeiste, griff) {
+
+      // Gemeinsame Drag-Logik — wird vom Griff UND vom Zettel-Hintergrund gestartet
+      function dragStarten(e, sofort) {
+        // sofort=true: Drag beginnt ohne Schwellenwert (z.B. vom Griff aus)
+        // sofort=false: erst nach ein paar Pixeln Bewegung (Touch auf Text-Bereich)
+        e.preventDefault();
+        inVordergrundBringen(zettel);
+
+        const startX      = e.clientX;
+        const startY      = e.clientY;
+        const zettelStartX = parseInt(zettel.style.left) || 0;
+        const zettelStartY = parseInt(zettel.style.top)  || 0;
+        const SCHWELLE    = 8; // px — Mindestbewegung bevor Drag bei Touch-Text startet
+        let amZiehen      = sofort;
+
+        if (sofort) zettel.classList.add('wird-gezogen');
+
+        function beimZiehen(e) {
+          e.preventDefault();
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+          if (!amZiehen) {
+            if (Math.hypot(dx, dy) < SCHWELLE) return;
+            amZiehen = true;
+            zettel.classList.add('wird-gezogen');
+          }
+          zettel.style.left = (zettelStartX + dx / canvasScale) + 'px';
+          zettel.style.top  = (zettelStartY + dy / canvasScale) + 'px';
+        }
+
+        function beimLoslassen() {
+          zettel.classList.remove('wird-gezogen');
+          document.removeEventListener('pointermove',   beimZiehen);
+          document.removeEventListener('pointerup',     beimLoslassen);
+          document.removeEventListener('pointercancel', beimLoslassen);
+        }
+
+        document.addEventListener('pointermove',   beimZiehen,  { passive: false });
+        document.addEventListener('pointerup',     beimLoslassen);
+        document.addEventListener('pointercancel', beimLoslassen);
+      }
+
+      // Drag-Griff: immer sofort ziehen (kein Schwellenwert)
+      griff.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        dragStarten(e, true);
+      });
+
+      // Zettel-Hintergrund:
+      // - Maus: sofort ziehen wenn NICHT auf Text/Buttons
+      // - Touch auf Text: Schwellenwert (kurzer Tap = Bearbeiten, langes Ziehen = Drag)
+      zettel.addEventListener('pointerdown', (e) => {
+        if (e.target === loeschenBtn)                                      return;
+        if (e.target === farbenLeiste || farbenLeiste.contains(e.target))  return;
+        if (e.target === griff)                                            return; // bereits handled
+
+        const istTouch = e.pointerType === 'touch';
+        const istAufText = e.target === text || text.contains(e.target);
+
+        if (!istTouch && istAufText) return; // Maus auf Text → Cursor/Bearbeiten
+
+        // Touch auf Text: Drag nur bei genug Bewegung
+        // Touch/Maus auf Rand: sofort
+        dragStarten(e, !istAufText);
+      });
+    }
+
+    // ===================================================
+    //  HOVER-LOGIK FÜR KLEBEZETTEL
+    //  Problem: Farbleiste liegt außerhalb des Elements (top: -28px).
+    //  CSS :hover verliert den Fokus sobald die Maus den Zettel verlässt —
+    //  also bevor man die Farbleiste erreicht.
+    //
+    //  Lösung: Timer-Trick.
+    //  Maus verlässt Zettel → Timer startet (300ms).
+    //  Maus betritt Farbleiste → Timer wird abgebrochen → alles bleibt sichtbar.
+    //  Maus verlässt Farbleiste ohne Zettel → Timer läuft durch → alles verschwindet.
+    // ===================================================
+    function zettelHoverMachen(zettel, farbenLeiste, loeschenBtn) {
+      let versteckTimer = null;
+
+      function einblenden() {
+        clearTimeout(versteckTimer);
+        farbenLeiste.style.opacity      = '1';
+        farbenLeiste.style.pointerEvents = 'all';
+        loeschenBtn.style.opacity       = '1';
+      }
+
+      function ausblenden() {
+        versteckTimer = setTimeout(() => {
+          farbenLeiste.style.opacity      = '0';
+          farbenLeiste.style.pointerEvents = 'none';
+          loeschenBtn.style.opacity       = '0';
+        }, 300); // 300ms Schonfrist — genug Zeit um zur Farbleiste zu gleiten
+      }
+
+      // Zettel selbst
+      zettel.addEventListener('mouseenter', einblenden);
+      zettel.addEventListener('mouseleave', ausblenden);
+
+      // Farbleiste: Timer stoppen wenn Maus drauf ist
+      farbenLeiste.addEventListener('mouseenter', einblenden);
+      farbenLeiste.addEventListener('mouseleave', ausblenden);
+    }
+
+
+    // Sidebar-Button verdrahten
+    document.getElementById('btn-klebezettel')
+      .addEventListener('click', klebezettelErstellen);
+
+
+    // ===================================================
+    //  STEMPEL
+    // ===================================================
+
+    // Die 6 Stempel: Name + SVG-Markup
+    const stempelDaten = [
+      {
+        name: 'Blümchen',
+        svg: `<svg viewBox="0 0 100 100" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="50" cy="22" rx="9" ry="17" transform="rotate(0,50,50)"/>
+          <ellipse cx="50" cy="22" rx="9" ry="17" transform="rotate(60,50,50)"/>
+          <ellipse cx="50" cy="22" rx="9" ry="17" transform="rotate(120,50,50)"/>
+          <ellipse cx="50" cy="22" rx="9" ry="17" transform="rotate(180,50,50)"/>
+          <ellipse cx="50" cy="22" rx="9" ry="17" transform="rotate(240,50,50)"/>
+          <ellipse cx="50" cy="22" rx="9" ry="17" transform="rotate(300,50,50)"/>
+          <circle cx="50" cy="50" r="13"/>
+        </svg>`
+      },
+      {
+        name: 'Stern',
+        svg: `<svg viewBox="0 0 100 100" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="50,8 61,36 91,36 68,57 76,84 50,67 24,84 32,57 9,36 39,36"/>
+        </svg>`
+      },
+      {
+        name: 'Herz',
+        svg: `<svg viewBox="0 0 100 100" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M50,82 C18,62 8,43 8,32 C8,17 18,7 33,7 C41,7 47,12 50,17 C53,12 59,7 67,7 C82,7 92,17 92,32 C92,43 82,62 50,82Z"/>
+        </svg>`
+      },
+      {
+        name: 'Schmetterling',
+        svg: `<svg viewBox="0 0 100 100" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M50,50 C44,36 20,16 8,27 C0,34 12,58 50,50Z"/>
+          <path d="M50,50 C56,36 80,16 92,27 C100,34 88,58 50,50Z"/>
+          <path d="M50,50 C43,63 20,74 27,86 C33,96 48,80 50,50Z"/>
+          <path d="M50,50 C57,63 80,74 73,86 C67,96 52,80 50,50Z"/>
+          <ellipse cx="50" cy="50" rx="3" ry="9"/>
+        </svg>`
+      },
+      {
+        name: 'Notenschlüssel',
+        svg: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <text x="50" y="84" text-anchor="middle" font-size="82"
+            font-family="Georgia, 'Times New Roman', serif"
+            fill="currentColor">𝄞</text>
+        </svg>`
+      },
+      {
+        name: 'Schraubenschlüssel',
+        svg: `<svg viewBox="0 0 100 100" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M68,8 C55,8 46,17 46,28 C46,33 48,37 51,41 L22,78
+            C19,82 19,88 23,91 C27,94 34,93 37,89 L66,52
+            C69,53 72,54 76,54 C89,54 98,45 98,34
+            C98,29 96,25 93,22 L82,33 L74,31 L72,23 L83,12
+            C79,9 74,8 68,8Z"/>
+          <circle cx="68" cy="30" r="9" fill="white"/>
+        </svg>`
+      },
+      // --- Neue Stempel aus dem IMG-Ordner ---
+      {
+        name: 'Auto',
+        svg: `<svg width="100%" viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg">
+<g transform="translate(10, 10)">
+  <ellipse cx="90" cy="148" rx="75" ry="10" fill="#aaa" opacity="0.18"/>
+  <path d="M 8,110 C 8,118 16,128 30,132 L 150,132 C 164,128 172,118 172,110 L 172,90 L 8,90 Z" fill="#CC3333" stroke="none"/>
+  <path d="M 40,90 C 38,72 46,50 65,38 C 78,28 100,26 115,36 C 132,48 140,68 140,90 Z" fill="#DD4444" stroke="none"/>
+  <path d="M 55,88 C 54,72 60,52 74,42 C 84,34 100,32 112,40 C 122,50 126,68 126,88 Z" fill="#EE5555" opacity="0.5" stroke="none"/>
+  <path d="M 58,88 C 57,74 63,56 76,46 C 86,38 102,36 112,44 C 122,52 126,70 125,88 Z" fill="#A8D4EC" opacity="0.85" stroke="none"/>
+  <path d="M 66,84 C 66,72 70,58 80,50 C 87,44 96,43 102,48" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+  <path d="M 8,112 C 4,112 2,116 2,120 C 2,124 4,128 8,128 L 20,128 L 20,112 Z" fill="#DDDDDD" stroke="none"/>
+  <path d="M 172,112 C 176,112 178,116 178,120 C 178,124 176,128 172,128 L 160,128 L 160,112 Z" fill="#DDDDDD" stroke="none"/>
+  <circle cx="42" cy="132" r="22" fill="#2A2A2A"/>
+  <circle cx="42" cy="132" r="16" fill="#444"/>
+  <circle cx="42" cy="132" r="9"  fill="#888"/>
+  <circle cx="42" cy="132" r="4"  fill="#CCC"/>
+  <circle cx="138" cy="132" r="22" fill="#2A2A2A"/>
+  <circle cx="138" cy="132" r="16" fill="#444"/>
+  <circle cx="138" cy="132" r="9"  fill="#888"/>
+  <circle cx="138" cy="132" r="4"  fill="#CCC"/>
+  <path d="M 20,118 C 20,108 28,100 42,100 C 56,100 64,108 64,118 L 64,130 L 20,130 Z" fill="#CC3333" stroke="none"/>
+  <path d="M 116,118 C 116,108 124,100 138,100 C 152,100 160,108 160,118 L 160,130 L 116,130 Z" fill="#CC3333" stroke="none"/>
+  <ellipse cx="18" cy="104" rx="8" ry="5" fill="#FFFDE0"/>
+  <ellipse cx="18" cy="104" rx="5" ry="3" fill="#FFEE88"/>
+  <ellipse cx="162" cy="104" rx="7" ry="5" fill="#EE2222"/>
+  <rect x="82" y="100" width="18" height="4" rx="2" fill="#AA2222"/>
+  <rect x="8" y="128" width="164" height="6" rx="2" fill="#AA2222"/>
+</g>
+</svg>`
+      },
+      {
+        name: 'Hund',
+        svg: `<svg width="100%" viewBox="0 0 200 210" xmlns="http://www.w3.org/2000/svg">
+<g transform="translate(10, 25)">
+  <path d="M 22,130 C 14,108 12,85 18,68 C 24,52 36,46 55,44 C 74,42 86,52 92,68 C 98,85 96,108 88,130 Z" fill="#C8956A" stroke="none"/>
+  <path d="M 32,128 C 26,106 24,86 28,72 C 33,58 42,52 55,52 C 68,52 77,58 82,72 C 86,86 84,106 78,128 Z" fill="#E8C49A" stroke="none"/>
+  <path d="M 18,58 C 16,42 22,26 34,18 C 41,12 48,10 55,10 C 62,10 69,12 76,18 C 88,26 94,42 92,58 C 90,74 76,84 55,84 C 34,84 20,74 18,58 Z" fill="#C8956A" stroke="none"/>
+  <path d="M 20,40 C 12,32 8,20 12,12 C 16,4 24,6 28,14 C 32,22 30,36 26,44 Z" fill="#B07A50"/>
+  <path d="M 90,40 C 98,32 102,20 98,12 C 94,4 86,6 82,14 C 78,22 80,36 84,44 Z" fill="#B07A50"/>
+  <ellipse cx="42" cy="54" rx="7" ry="7" fill="#4A3220"/>
+  <ellipse cx="68" cy="54" rx="7" ry="7" fill="#4A3220"/>
+  <ellipse cx="42" cy="54" rx="4" ry="4" fill="#1A0C04"/>
+  <ellipse cx="68" cy="54" rx="4" ry="4" fill="#1A0C04"/>
+  <circle cx="44" cy="52" r="2" fill="white"/>
+  <circle cx="70" cy="52" r="2" fill="white"/>
+  <ellipse cx="55" cy="66" rx="8" ry="6" fill="#3A2214"/>
+  <ellipse cx="55" cy="64" rx="6" ry="3" fill="#5A3424"/>
+  <path d="M 47,72 C 48,78 52,82 55,82 C 58,82 62,78 63,72" fill="#E8998A" stroke="none"/>
+  <path d="M 47,72 C 50,76 52,80 55,80 C 58,80 60,76 63,72" fill="none" stroke="#B05040" stroke-width="1" stroke-linecap="round"/>
+  <ellipse cx="55" cy="80" rx="5" ry="4" fill="#E8607A"/>
+  <ellipse cx="30" cy="140" rx="12" ry="8" fill="#C8956A"/>
+  <ellipse cx="80" cy="140" rx="12" ry="8" fill="#C8956A"/>
+  <ellipse cx="22" cy="142" rx="4" ry="3.5" fill="#B87A50"/>
+  <ellipse cx="30" cy="145" rx="4" ry="3.5" fill="#B87A50"/>
+  <ellipse cx="38" cy="142" rx="4" ry="3.5" fill="#B87A50"/>
+  <ellipse cx="72" cy="142" rx="4" ry="3.5" fill="#B87A50"/>
+  <ellipse cx="80" cy="145" rx="4" ry="3.5" fill="#B87A50"/>
+  <ellipse cx="88" cy="142" rx="4" ry="3.5" fill="#B87A50"/>
+  <path d="M 88,110 C 105,100 118,88 122,72 C 124,60 118,52 112,56 C 106,60 104,72 108,82" fill="none" stroke="#C8956A" stroke-width="9" stroke-linecap="round"/>
+</g>
+</svg>`
+      },
+      {
+        name: 'Katze',
+        svg: `<svg width="100%" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+<g transform="translate(20, 30)">
+  <path d="M 20,110 C 10,90 8,70 15,55 C 20,44 30,40 50,38 C 70,36 80,44 85,55 C 92,70 90,90 80,110 Z" fill="#C97B4B" stroke="none"/>
+  <path d="M 30,108 C 24,88 23,72 28,60 C 33,50 42,46 50,46 C 58,46 67,50 72,60 C 77,72 76,88 70,108 Z" fill="#E8B07A" stroke="none"/>
+  <path d="M 18,50 C 16,38 20,24 30,18 C 37,13 44,12 50,12 C 56,12 63,13 70,18 C 80,24 84,38 82,50 C 80,62 70,70 50,70 C 30,70 20,62 18,50 Z" fill="#C97B4B" stroke="none"/>
+  <path d="M 22,36 L 16,12 L 36,28 Z" fill="#C97B4B" stroke="none"/>
+  <path d="M 78,36 L 84,12 L 64,28 Z" fill="#C97B4B" stroke="none"/>
+  <path d="M 24,34 L 19,16 L 33,28 Z" fill="#E8A0A0" stroke="none"/>
+  <path d="M 76,34 L 81,16 L 67,28 Z" fill="#E8A0A0" stroke="none"/>
+  <ellipse cx="38" cy="46" rx="6" ry="7" fill="#4A3728"/>
+  <ellipse cx="62" cy="46" rx="6" ry="7" fill="#4A3728"/>
+  <ellipse cx="38" cy="46" rx="2" ry="5" fill="#1A1008"/>
+  <ellipse cx="62" cy="46" rx="2" ry="5" fill="#1A1008"/>
+  <circle cx="40" cy="44" r="1.5" fill="white"/>
+  <circle cx="64" cy="44" r="1.5" fill="white"/>
+  <path d="M 46,56 L 50,52 L 54,56 L 50,60 Z" fill="#D4547A"/>
+  <path d="M 50,60 C 46,64 40,66 38,63" fill="none" stroke="#8B4455" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M 50,60 C 54,64 60,66 62,63" fill="none" stroke="#8B4455" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="48" y1="58" x2="22" y2="52" stroke="#6B4C3A" stroke-width="0.8" opacity="0.6"/>
+  <line x1="48" y1="60" x2="20" y2="60" stroke="#6B4C3A" stroke-width="0.8" opacity="0.6"/>
+  <line x1="52" y1="58" x2="78" y2="52" stroke="#6B4C3A" stroke-width="0.8" opacity="0.6"/>
+  <line x1="52" y1="60" x2="80" y2="60" stroke="#6B4C3A" stroke-width="0.8" opacity="0.6"/>
+  <ellipse cx="28" cy="118" rx="10" ry="7" fill="#C97B4B"/>
+  <ellipse cx="72" cy="118" rx="10" ry="7" fill="#C97B4B"/>
+  <ellipse cx="22" cy="120" rx="3.5" ry="3" fill="#BE7045"/>
+  <ellipse cx="28" cy="122" rx="3.5" ry="3" fill="#BE7045"/>
+  <ellipse cx="34" cy="120" rx="3.5" ry="3" fill="#BE7045"/>
+  <ellipse cx="66" cy="120" rx="3.5" ry="3" fill="#BE7045"/>
+  <ellipse cx="72" cy="122" rx="3.5" ry="3" fill="#BE7045"/>
+  <ellipse cx="78" cy="120" rx="3.5" ry="3" fill="#BE7045"/>
+  <path d="M 80,100 C 100,95 115,90 118,75 C 121,60 110,52 102,58" fill="none" stroke="#C97B4B" stroke-width="10" stroke-linecap="round"/>
+  <path d="M 80,100 C 100,95 115,90 118,75 C 121,60 110,52 102,58" fill="none" stroke="#E8B07A" stroke-width="5" stroke-linecap="round"/>
+</g>
+</svg>`
+      },
+      {
+        name: 'Marienkäfer',
+        svg: `<svg width="100%" viewBox="0 0 680 267" xmlns="http://www.w3.org/2000/svg">
+<ellipse cx="340" cy="218" rx="95" ry="10" fill="#888" opacity="0.12"/>
+<path d="M 290,160 C 270,152 248,148 232,150" fill="none" stroke="#2A1A0A" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M 285,178 C 262,175 240,176 224,182" fill="none" stroke="#2A1A0A" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M 292,196 C 272,198 252,204 238,214" fill="none" stroke="#2A1A0A" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M 390,160 C 410,152 432,148 448,150" fill="none" stroke="#2A1A0A" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M 395,178 C 418,175 440,176 456,182" fill="none" stroke="#2A1A0A" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M 388,196 C 408,198 428,204 442,214" fill="none" stroke="#2A1A0A" stroke-width="3.5" stroke-linecap="round"/>
+<ellipse cx="340" cy="175" rx="98" ry="82" fill="#CC2211"/>
+<path d="M 340,96 C 340,100 340,240 340,252" fill="none" stroke="#1A0A04" stroke-width="3.5"/>
+<circle cx="306" cy="142" r="14" fill="#1A0A04"/>
+<circle cx="296" cy="178" r="13" fill="#1A0A04"/>
+<circle cx="308" cy="212" r="11" fill="#1A0A04"/>
+<circle cx="374" cy="142" r="14" fill="#1A0A04"/>
+<circle cx="384" cy="178" r="13" fill="#1A0A04"/>
+<circle cx="372" cy="212" r="11" fill="#1A0A04"/>
+<ellipse cx="318" cy="118" rx="28" ry="18" fill="#EE4433" opacity="0.6"/>
+<ellipse cx="340" cy="96" rx="38" ry="32" fill="#1A0A04"/>
+<ellipse cx="324" cy="88" rx="9" ry="10" fill="#F8F0D0"/>
+<ellipse cx="356" cy="88" rx="9" ry="10" fill="#F8F0D0"/>
+<ellipse cx="325" cy="89" rx="5" ry="6" fill="#1A1A2A"/>
+<ellipse cx="357" cy="89" rx="5" ry="6" fill="#1A1A2A"/>
+<circle cx="327" cy="87" r="2" fill="white"/>
+<circle cx="359" cy="87" r="2" fill="white"/>
+<path d="M 326,68 C 316,52 308,40 300,30" fill="none" stroke="#1A0A04" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M 354,68 C 364,52 372,40 380,30" fill="none" stroke="#1A0A04" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="300" cy="30" r="5" fill="#1A0A04"/>
+<circle cx="380" cy="30" r="5" fill="#1A0A04"/>
+<ellipse cx="340" cy="175" rx="98" ry="82" fill="none" stroke="#1A0A04" stroke-width="2"/>
+</svg>`
+      },
+      {
+        name: 'Spinne',
+        svg: `<svg width="100%" viewBox="0 0 680 280" xmlns="http://www.w3.org/2000/svg">
+<ellipse cx="340" cy="240" rx="60" ry="7" fill="#888" opacity="0.12"/>
+<path d="M 298,158 C 274,144 252,132 228,124 C 222,122 218,124 216,128" fill="none" stroke="#2A200A" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M 294,170 C 268,162 244,158 220,158 C 214,158 210,162 208,166" fill="none" stroke="#2A200A" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M 294,184 C 270,182 248,186 226,196 C 220,200 218,205 220,210" fill="none" stroke="#2A200A" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M 298,198 C 278,204 260,216 244,232 C 240,238 240,244 244,248" fill="none" stroke="#2A200A" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M 382,158 C 406,144 428,132 452,124 C 458,122 462,124 464,128" fill="none" stroke="#2A200A" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M 386,170 C 412,162 436,158 460,158 C 466,158 470,162 472,166" fill="none" stroke="#2A200A" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M 386,184 C 410,182 432,186 454,196 C 460,200 462,205 460,210" fill="none" stroke="#2A200A" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M 382,198 C 402,204 420,216 436,232 C 440,238 440,244 436,248" fill="none" stroke="#2A200A" stroke-width="3.5" stroke-linecap="round"/>
+<ellipse cx="340" cy="195" rx="65" ry="72" fill="#2A1E08"/>
+<path d="M 340,132 C 355,138 368,150 372,165 C 376,180 368,194 360,200 C 352,206 340,208 340,208 C 340,208 328,206 320,200 C 312,194 304,180 308,165 C 312,150 325,138 340,132 Z" fill="#4A3418" opacity="0.8"/>
+<path d="M 330,148 L 350,148 L 345,168 L 360,185 L 340,190 L 320,185 L 335,168 Z" fill="#8B6914" opacity="0.5"/>
+<ellipse cx="326" cy="148" rx="16" ry="10" fill="#4A3418" opacity="0.6"/>
+<ellipse cx="340" cy="126" rx="14" ry="10" fill="#3A2810"/>
+<ellipse cx="340" cy="108" rx="46" ry="40" fill="#3A2810"/>
+<ellipse cx="330" cy="96" rx="8" ry="8" fill="#E8E0A0"/>
+<ellipse cx="350" cy="96" rx="8" ry="8" fill="#E8E0A0"/>
+<ellipse cx="330" cy="96" rx="5" ry="5" fill="#0A0A14"/>
+<ellipse cx="350" cy="96" rx="5" ry="5" fill="#0A0A14"/>
+<circle cx="332" cy="94" r="2" fill="white"/>
+<circle cx="352" cy="94" r="2" fill="white"/>
+<ellipse cx="314" cy="99" rx="5" ry="5" fill="#C8C090"/>
+<ellipse cx="366" cy="99" rx="5" ry="5" fill="#C8C090"/>
+<ellipse cx="314" cy="99" rx="3" ry="3" fill="#0A0A14"/>
+<ellipse cx="366" cy="99" rx="3" ry="3" fill="#0A0A14"/>
+<ellipse cx="320" cy="110" rx="4" ry="4" fill="#B0A878"/>
+<ellipse cx="360" cy="110" rx="4" ry="4" fill="#B0A878"/>
+<ellipse cx="333" cy="112" rx="3.5" ry="3.5" fill="#B0A878"/>
+<ellipse cx="347" cy="112" rx="3.5" ry="3.5" fill="#B0A878"/>
+<path d="M 328,132 C 322,140 318,148 320,154" fill="none" stroke="#2A1E08" stroke-width="5" stroke-linecap="round"/>
+<path d="M 352,132 C 358,140 362,148 360,154" fill="none" stroke="#2A1E08" stroke-width="5" stroke-linecap="round"/>
+<ellipse cx="320" cy="156" rx="6" ry="5" fill="#1A1408"/>
+<ellipse cx="360" cy="156" rx="6" ry="5" fill="#1A1408"/>
+</svg>`
+      },
+      {
+        name: 'VW Käfer',
+        svg: `<img src="IMG/vw_kaefer_stamp.svg" style="width:100%;height:100%;object-fit:contain;">`
+      },
+      // --- Emoji-Stempel ---
+      ...['😀','😂','🥰','😎','🤔','😴','🥳','😤',
+         '🐶','🐱','🐻','🦊','🐸','🦋','🐝','🐞',
+         '🌸','🌻','🌈','⭐','🌙','☀️','❄️','🍀',
+         '❤️','🔥','💫','⚡','🎵','📚','☕','🍰',
+         '✈️','🏠','💡','🎉','👍','✨'].map(emoji => ({
+        name: emoji,
+        svg: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><text x="50" y="82" text-anchor="middle" font-size="78">${emoji}</text></svg>`
+      })),
+    ];
+
+    // Tinten-Farben für den platzierten Stempel
+    const tintenFarben = [
+      { name: 'rot',      hex: '#c0392b' },
+      { name: 'blau',     hex: '#2471a3' },
+      { name: 'gruen',    hex: '#1e8449' },
+      { name: 'lila',     hex: '#7d3c98' },
+      { name: 'schwarz',  hex: '#2c2c2c' },
+    ];
+
+    // ---- Panel mit Stempel-Vorschauen befüllen ----
+    function stempelPanelBefuellen() {
+      const raster = document.getElementById('stempel-raster');
+      stempelDaten.forEach(stempel => {
+        const vorschau = document.createElement('div');
+        vorschau.className = 'stempel-vorschau';
+        vorschau.title = stempel.name;
+        vorschau.innerHTML = stempel.svg;
+
+        // Klick auf Vorschau → Stempel auf die Fläche legen
+        vorschau.addEventListener('click', () => {
+          stempelPlatzieren(stempel.svg);
+          // Panel schließen nach Auswahl
+          document.getElementById('stempel-panel').classList.remove('sichtbar');
+          document.getElementById('btn-stempel').classList.remove('active');
+        });
+
+        raster.appendChild(vorschau);
+      });
+    }
+
+    // ---- Stempel auf die Fläche legen ----
+    function stempelPlatzieren(svgMarkup) {
+      const flaeche = document.getElementById('flaeche');
+
+      const startX     = Math.random() * (CANVAS_BREITE - 120) + 40;
+      const startY     = Math.random() * (CANVAS_HOEHE  - 120) + 40;
+      const startDreh  = (Math.random() * 20) - 10; // -10° bis +10°
+
+      // Container
+      const el = document.createElement('div');
+      el.className = 'stempel-element';
+      el.dataset.typ      = 'stempel';
+      el.dataset.svgIndex = stempelDaten.findIndex(s => s.svg === svgMarkup);
+      el.style.left      = startX + 'px';
+      el.style.top       = startY + 'px';
+      el.style.transform = `rotate(${startDreh}deg)`;
+      el.dataset.drehung = startDreh;
+      // Standard-Tintenfarbe: Rot
+      el.style.color = tintenFarben[0].hex;
+
+      // SVG reinhängen
+      el.innerHTML = svgMarkup;
+
+      // Dreh-Griff
+      const drehGriff = document.createElement('div');
+      drehGriff.className = 'stempel-dreh-griff';
+      drehGriff.textContent = '↻';
+      el.appendChild(drehGriff);
+
+      // Löschen-Knopf
+      const loeschenBtn = document.createElement('div');
+      loeschenBtn.className = 'stempel-loeschen';
+      loeschenBtn.textContent = '×';
+      loeschenBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        el.style.transition = 'opacity 0.2s, transform 0.2s';
+        el.style.opacity = '0';
+        el.style.transform += ' scale(0.8)';
+        setTimeout(() => el.remove(), 200);
+      });
+      el.appendChild(loeschenBtn);
+
+      // Resize-Griff (unten rechts)
+      const resizeGriff = document.createElement('div');
+      resizeGriff.className = 'stempel-resize-griff';
+      resizeGriff.textContent = '⤡';
+      resizeGriff.title = 'Größe ändern';
+      resizeGriff.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const startGroesse = el.offsetWidth;
+        const startMausX   = e.clientX;
+
+        function beimResizen(e) {
+          const neueGroesse = Math.max(40, startGroesse + (e.clientX - startMausX) / canvasScale);
+          el.style.width  = neueGroesse + 'px';
+          el.style.height = neueGroesse + 'px'; // quadratisch halten
+        }
+        function beimLoslassen() {
+          document.removeEventListener('pointermove', beimResizen);
+          document.removeEventListener('pointerup',   beimLoslassen);
+        }
+        document.addEventListener('pointermove', beimResizen);
+        document.addEventListener('pointerup',   beimLoslassen);
+      });
+      el.appendChild(resizeGriff);
+
+      // Tinten-Farb-Punkte
+      const farbenLeiste = document.createElement('div');
+      farbenLeiste.className = 'stempel-farben';
+      tintenFarben.forEach(farbe => {
+        const punkt = document.createElement('div');
+        punkt.className = 'farb-punkt';
+        punkt.style.background = farbe.hex;
+        punkt.addEventListener('click', (e) => {
+          e.stopPropagation();
+          el.style.color = farbe.hex;
+        });
+        farbenLeiste.appendChild(punkt);
+      });
+      el.appendChild(farbenLeiste);
+
+      flaeche.appendChild(el);
+      hinweisAusblenden();
+      inVordergrundBringen(el);
+
+      // Gleiche Hover-Logik wie Klebezettel für die Farbleiste
+      stempelHoverMachen(el, farbenLeiste, loeschenBtn);
+
+      // Drag + Rotate
+      stempelZiehbarMachen(el, drehGriff, loeschenBtn, farbenLeiste, resizeGriff);
+      drehbarMachen(el, drehGriff); // drehbarMachen funktioniert für alle Elemente
+    }
+
+    // ---- Hover-Logik (gleicher Timer-Trick wie bei Klebezetteln) ----
+    function stempelHoverMachen(el, farbenLeiste, loeschenBtn) {
+      let timer = null;
+
+      function ein() {
+        clearTimeout(timer);
+        farbenLeiste.style.opacity = '1';
+        farbenLeiste.style.pointerEvents = 'all';
+      }
+      function aus() {
+        timer = setTimeout(() => {
+          farbenLeiste.style.opacity = '0';
+          farbenLeiste.style.pointerEvents = 'none';
+        }, 300);
+      }
+
+      el.addEventListener('mouseenter', ein);
+      el.addEventListener('mouseleave', aus);
+      farbenLeiste.addEventListener('mouseenter', ein);
+      farbenLeiste.addEventListener('mouseleave', aus);
+    }
+
+    // ---- Zieh-Logik ----
+    function stempelZiehbarMachen(el, drehGriff, loeschenBtn, farbenLeiste, resizeGriff) {
+      el.addEventListener('pointerdown', (e) => {
+        if (e.target === drehGriff)   return;
+        if (e.target === loeschenBtn) return;
+        if (e.target === resizeGriff) return;
+        if (farbenLeiste.contains(e.target)) return;
+
+        e.preventDefault();
+        inVordergrundBringen(el);
+        el.classList.add('wird-gezogen');
+
+        const mausX0  = e.clientX;
+        const mausY0  = e.clientY;
+        const elX0    = parseInt(el.style.left) || 0;
+        const elY0    = parseInt(el.style.top)  || 0;
+
+        function beimZiehen(e) {
+          el.style.left = (elX0 + (e.clientX - mausX0) / canvasScale) + 'px';
+          el.style.top  = (elY0 + (e.clientY - mausY0) / canvasScale) + 'px';
+        }
+        function beimLoslassen() {
+          el.classList.remove('wird-gezogen');
+          document.removeEventListener('pointermove', beimZiehen);
+          document.removeEventListener('pointerup',   beimLoslassen);
+        }
+
+        document.addEventListener('pointermove', beimZiehen);
+        document.addEventListener('pointerup',   beimLoslassen);
+      });
+    }
+
+    // ---- Panel-Toggle ----
+    const btnStempel   = document.getElementById('btn-stempel');
+    const stempelPanel = document.getElementById('stempel-panel');
+
+    btnStempel.addEventListener('click', () => {
+      const offen = stempelPanel.classList.toggle('sichtbar');
+      btnStempel.classList.toggle('active', offen);
+    });
+
+    // Stempel-Panel schließen wenn man auf die Fläche klickt
+    document.getElementById('flaeche').addEventListener('click', () => {
+      stempelPanel.classList.remove('sichtbar');
+      btnStempel.classList.remove('active');
+      hintergrundPanel.classList.remove('sichtbar');
+      btnHintergrund.classList.remove('active');
+    });
+
+    // Panel befüllen beim Start
+    stempelPanelBefuellen();
+
+
+    // ===================================================
+    //  HINTERGRUND-SWITCHER
+    // ===================================================
+
+    const hintergruende = [
+      {
+        name: 'Standard',
+        klasse: '',          // keine Extra-Klasse = Standard-CSS bleibt
+        // Swatch: warmes Creme mit Raster-Andeutung
+        swatchStyle: 'background: #fdfaf5; background-image: linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px); background-size: 14px 14px;'
+      },
+      {
+        name: 'Pergament',
+        klasse: 'bg-pergament',
+        swatchStyle: 'background: #f4ead0;'
+      },
+      {
+        name: 'Weiß',
+        klasse: 'bg-weiss',
+        swatchStyle: 'background: #ffffff;'
+      },
+      {
+        name: 'Stahl',
+        klasse: 'bg-stahl',
+        swatchStyle: 'background: #b0b8bf;'
+      },
+      {
+        name: 'Wiese',
+        klasse: 'bg-wiese',
+        swatchStyle: 'background: #d4e8c2;'
+      },
+      {
+        name: 'Rost',
+        klasse: 'bg-rost',
+        swatchStyle: 'background: #8b3a2a;'
+      },
+      // --- Foto-Hintergründe ---
+      {
+        name: '📷 Pergament',
+        klasse: 'bg-foto-pergament',
+        swatchStyle: "background-image: url('IMG/Pergament.png'); background-size: cover; background-position: center;"
+      },
+      {
+        name: '📷 Wiese',
+        klasse: 'bg-foto-wiese',
+        swatchStyle: "background-image: url('IMG/wiese.png'); background-size: cover; background-position: center;"
+      },
+      {
+        name: '📷 Rost',
+        klasse: 'bg-foto-rost',
+        swatchStyle: "background-image: url('IMG/Rost.png'); background-size: cover; background-position: center;"
+      },
+      {
+        name: '📷 Stahl',
+        klasse: 'bg-foto-stahl',
+        swatchStyle: "background-image: url('IMG/stahl.png'); background-size: cover; background-position: center;"
+      },
+      {
+        name: '📷 Wasser',
+        klasse: 'bg-foto-wasser',
+        swatchStyle: "background-image: url('IMG/Wasser.png'); background-size: cover; background-position: center;"
+      },
+    ];
+
+    // Alle Hintergrund-CSS-Klassen (zum sauberen Entfernen beim Wechsel)
+    const alleHintergrundKlassen = hintergruende.map(h => h.klasse).filter(Boolean);
+
+    function hintergrundPanelBefuellen() {
+      const panel = document.getElementById('hintergrund-panel');
+      const flaeche = document.getElementById('flaeche');
+
+      hintergruende.forEach((hg, index) => {
+        const option = document.createElement('div');
+        option.className = 'hintergrund-option' + (index === 0 ? ' aktiv' : '');
+        option.dataset.klasse = hg.klasse;
+
+        const swatch = document.createElement('div');
+        swatch.className = 'hintergrund-swatch';
+        swatch.style.cssText = hg.swatchStyle;
+
+        const label = document.createElement('div');
+        label.className = 'hintergrund-label';
+        label.textContent = hg.name;
+
+        option.appendChild(swatch);
+        option.appendChild(label);
+
+        option.addEventListener('click', () => {
+          // Alle Hintergrund-Klassen entfernen
+          alleHintergrundKlassen.forEach(k => flaeche.classList.remove(k));
+
+          // Neue Klasse setzen (wenn vorhanden)
+          if (hg.klasse) flaeche.classList.add(hg.klasse);
+
+          // Aktiv-Markierung aktualisieren
+          panel.querySelectorAll('.hintergrund-option').forEach(o => o.classList.remove('aktiv'));
+          option.classList.add('aktiv');
+        });
+
+        panel.appendChild(option);
+      });
+    }
+
+    // Panel-Toggle
+    const btnHintergrund    = document.getElementById('btn-hintergrund');
+    const hintergrundPanel  = document.getElementById('hintergrund-panel');
+
+    btnHintergrund.addEventListener('click', () => {
+      // Stempel-Panel schließen falls offen
+      stempelPanel.classList.remove('sichtbar');
+      btnStempel.classList.remove('active');
+
+      const offen = hintergrundPanel.classList.toggle('sichtbar');
+      btnHintergrund.classList.toggle('active', offen);
+    });
+
+    // Stempel-Panel-Toggle: Hintergrund-Panel schließen
+    btnStempel.addEventListener('click', () => {
+      hintergrundPanel.classList.remove('sichtbar');
+      btnHintergrund.classList.remove('active');
+    });
+
+    // Panel beim Start befüllen
+    hintergrundPanelBefuellen();
+
+
+    // ===================================================
+    //  TEXT-TOOL
+    // ===================================================
+
+    const textSchriften = [
+      { name: 'Serif',   css: "'Playfair Display', serif",  label: 'Serif' },
+      { name: 'Sans',    css: "'Inter', sans-serif",         label: 'Sans'  },
+      { name: 'Hand',    css: "'Caveat', cursive",           label: 'Hand'  },
+    ];
+
+    const textFarben = [
+      '#2c2c2c', // fast schwarz
+      '#8b3a2a', // Rost-Rot
+      '#2471a3', // Tinten-Blau
+      '#1e6b3a', // Dunkelgrün
+      '#f8f4ee', // Creme (für dunkle Hintergründe)
+    ];
+
+    function textElementErstellen() {
+      const flaeche = document.getElementById('flaeche');
+
+      const startX    = Math.random() * (CANVAS_BREITE - 250) + 60;
+      const startY    = Math.random() * (CANVAS_HOEHE  - 100) + 60;
+      const startDreh = (Math.random() * 10) - 5; // -5° bis +5°
+
+      // ---- Container ----
+      const el = document.createElement('div');
+      el.className       = 'text-element';
+      el.dataset.typ     = 'text';
+      el.style.left      = startX + 'px';
+      el.style.top       = startY + 'px';
+      el.style.transform = `rotate(${startDreh}deg)`;
+      el.dataset.drehung = startDreh;
+      el.dataset.schrift = 0;  // Index in textSchriften
+      el.dataset.groesse = 22; // aktuelle Schriftgröße in px
+
+      // ---- Drag-Streifen ----
+      const dragStrip = document.createElement('div');
+      dragStrip.className = 'text-drag-strip';
+
+      // ---- Textinhalt ----
+      const inhalt = document.createElement('div');
+      inhalt.className       = 'text-inhalt';
+      inhalt.contentEditable = 'true';
+      inhalt.spellcheck      = false;
+      inhalt.dataset.placeholder = 'Text…';
+      inhalt.style.fontFamily = textSchriften[0].css;
+      inhalt.style.fontSize   = '22px';
+      inhalt.style.color      = textFarben[0];
+
+      // ---- Toolbar (über dem Element) ----
+      const toolbar = document.createElement('div');
+      toolbar.className = 'text-toolbar';
+
+      // Schriftart-Buttons
+      textSchriften.forEach((schrift, i) => {
+        const btn = document.createElement('div');
+        btn.className   = 'text-font-btn' + (i === 0 ? ' aktiv' : '');
+        btn.textContent = schrift.label;
+        btn.style.fontFamily = schrift.css;
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          inhalt.style.fontFamily = schrift.css;
+          el.dataset.schrift = i;
+          toolbar.querySelectorAll('.text-font-btn').forEach(b => b.classList.remove('aktiv'));
+          btn.classList.add('aktiv');
+        });
+        toolbar.appendChild(btn);
+      });
+
+      // Trennstrich
+      const sep1 = document.createElement('div');
+      sep1.className = 'text-toolbar-sep';
+      toolbar.appendChild(sep1);
+
+      // Größe kleiner
+      const kleinerBtn = document.createElement('div');
+      kleinerBtn.className   = 'text-groesse-btn';
+      kleinerBtn.textContent = '−';
+      kleinerBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const neu = Math.max(10, parseInt(el.dataset.groesse) - 2);
+        el.dataset.groesse      = neu;
+        inhalt.style.fontSize   = neu + 'px';
+      });
+      toolbar.appendChild(kleinerBtn);
+
+      // Größe größer
+      const groesserBtn = document.createElement('div');
+      groesserBtn.className   = 'text-groesse-btn';
+      groesserBtn.textContent = '+';
+      groesserBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const neu = Math.min(120, parseInt(el.dataset.groesse) + 2);
+        el.dataset.groesse      = neu;
+        inhalt.style.fontSize   = neu + 'px';
+      });
+      toolbar.appendChild(groesserBtn);
+
+      // ---- Bold & Italic ----
+      // e.preventDefault() verhindert dass die Textauswahl verloren geht beim Klick
+      const boldBtn = document.createElement('div');
+      boldBtn.className   = 'text-font-btn';
+      boldBtn.innerHTML   = '<strong>B</strong>';
+      boldBtn.title       = 'Fett (markierten Text)';
+      boldBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        document.execCommand('bold'); // formatiert nur den markierten Text
+        inhalt.focus();
+      });
+      toolbar.appendChild(boldBtn);
+
+      const italicBtn = document.createElement('div');
+      italicBtn.className   = 'text-font-btn';
+      italicBtn.innerHTML   = '<em>I</em>';
+      italicBtn.title       = 'Kursiv (markierten Text)';
+      italicBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        document.execCommand('italic');
+        inhalt.focus();
+      });
+      toolbar.appendChild(italicBtn);
+
+      // Trennstrich
+      const sep2 = document.createElement('div');
+      sep2.className = 'text-toolbar-sep';
+      toolbar.appendChild(sep2);
+
+      // Farb-Punkte
+      textFarben.forEach(farbe => {
+        const punkt = document.createElement('div');
+        punkt.className        = 'text-farb-punkt';
+        punkt.style.background = farbe;
+        // Creme braucht einen sichtbaren Rand
+        if (farbe === '#f8f4ee') punkt.style.border = '1.5px solid #ccc';
+        punkt.addEventListener('pointerdown', (e) => {
+          e.preventDefault(); e.stopPropagation();
+          inhalt.style.color = farbe;
+        });
+        toolbar.appendChild(punkt);
+      });
+
+      // Trennstrich
+      const sep3 = document.createElement('div');
+      sep3.className = 'text-toolbar-sep';
+      toolbar.appendChild(sep3);
+
+      // Löschen
+      const loeschenBtn = document.createElement('div');
+      loeschenBtn.className   = 'text-loeschen-btn';
+      loeschenBtn.textContent = '×';
+      loeschenBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        el.style.transition = 'opacity 0.2s, transform 0.2s';
+        el.style.opacity    = '0';
+        setTimeout(() => el.remove(), 200);
+      });
+      toolbar.appendChild(loeschenBtn);
+
+      // ---- Rotate-Griff ----
+      const drehGriff = document.createElement('div');
+      drehGriff.className   = 'text-dreh-griff';
+      drehGriff.textContent = '↻';
+
+      // ---- Resize-Griff ----
+      const resizeGriff = document.createElement('div');
+      resizeGriff.className   = 'text-resize-griff';
+      resizeGriff.textContent = '⤡';
+      resizeGriff.title = 'Breite ändern';
+      resizeGriff.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const startBreite = el.offsetWidth;
+        const startMausX  = e.clientX;
+
+        function beimResizen(e) {
+          const neueBreite = Math.max(80, startBreite + (e.clientX - startMausX) / canvasScale);
+          el.style.width    = neueBreite + 'px';
+          el.style.maxWidth = neueBreite + 'px'; // max-width überschreiben
+        }
+        function beimLoslassen() {
+          document.removeEventListener('pointermove', beimResizen);
+          document.removeEventListener('pointerup',   beimLoslassen);
+        }
+        document.addEventListener('pointermove', beimResizen);
+        document.addEventListener('pointerup',   beimLoslassen);
+      });
+
+      // ---- Zusammensetzen ----
+      el.appendChild(toolbar);
+      el.appendChild(dragStrip);
+      el.appendChild(inhalt);
+      el.appendChild(drehGriff);
+      el.appendChild(resizeGriff);
+
+      flaeche.appendChild(el);
+      hinweisAusblenden();
+      inVordergrundBringen(el);
+
+      // ---- Interaktivität ----
+      // Drag über den Streifen
+      dragStrip.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        inVordergrundBringen(el);
+        const mausX0 = e.clientX, mausY0 = e.clientY;
+        const elX0   = parseInt(el.style.left) || 0;
+        const elY0   = parseInt(el.style.top)  || 0;
+
+        function beimZiehen(e) {
+          el.style.left = (elX0 + (e.clientX - mausX0) / canvasScale) + 'px';
+          el.style.top  = (elY0 + (e.clientY - mausY0) / canvasScale) + 'px';
+        }
+        function beimLoslassen() {
+          document.removeEventListener('pointermove', beimZiehen);
+          document.removeEventListener('pointerup',   beimLoslassen);
+        }
+        document.addEventListener('pointermove', beimZiehen);
+        document.addEventListener('pointerup',   beimLoslassen);
+      });
+
+      // Rotate (gleiche Funktion wie überall)
+      drehbarMachen(el, drehGriff);
+
+      // Hover-Logik für Toolbar (gleicher Timer-Trick)
+      let toolbarTimer = null;
+      function toolbarEin() {
+        clearTimeout(toolbarTimer);
+        toolbar.style.opacity      = '1';
+        toolbar.style.pointerEvents = 'all';
+      }
+      function toolbarAus() {
+        toolbarTimer = setTimeout(() => {
+          toolbar.style.opacity      = '0';
+          toolbar.style.pointerEvents = 'none';
+        }, 300);
+      }
+      el.addEventListener('mouseenter',      toolbarEin);
+      el.addEventListener('mouseleave',      toolbarAus);
+      toolbar.addEventListener('mouseenter', toolbarEin);
+      toolbar.addEventListener('mouseleave', toolbarAus);
+
+      // Direkt ins Schreiben springen
+      setTimeout(() => inhalt.focus(), 50);
+    }
+
+    // Sidebar-Button verdrahten
+    document.getElementById('btn-text')
+      .addEventListener('click', textElementErstellen);
+
+
+    // ===================================================
+    //  DATEI-UPLOAD VERKABELUNG
+    //  Klick auf Sidebar-Button → Datei-Dialog öffnen → Polaroid erstellen
+    // ===================================================
+    const btnPolaroid = document.getElementById('btn-polaroid');
+    const fotoInput   = document.getElementById('foto-input');
+
+    // Klick auf den 🖼️-Button öffnet den Datei-Dialog
+    btnPolaroid.addEventListener('click', () => {
+      fotoInput.value = ''; // Reset: damit man dasselbe Foto zweimal wählen kann
+      fotoInput.click();
+    });
+
+    // Wenn eine Datei gewählt wurde
+    fotoInput.addEventListener('change', (e) => {
+      const datei = e.target.files[0];
+      if (!datei) return; // Abbruch: keine Datei gewählt
+
+      // FileReader: liest die Bilddatei und gibt sie als Data-URL zurück
+      // Eine Data-URL ist ein langer String der das Bild direkt enthält
+      // (statt eines Dateipfads) — funktioniert ohne Server
+      const leser = new FileReader();
+
+      leser.onload = (event) => {
+        polaroidErstellen(event.target.result);
+      };
+
+      leser.readAsDataURL(datei); // Starte das Lesen
+    });
+
+
+    // ===================================================
+    //  SPEICHERN / LADEN / VERSIEGELN
+    // ===================================================
+
+    // ---- Seite serialisieren: alles in ein JSON-Objekt packen ----
+    function seitenStandSerializieren(versiegelt = false) {
+      const flaeche = document.getElementById('flaeche');
+      const elemente = [];
+
+      flaeche.querySelectorAll('[data-typ]').forEach(el => {
+        const typ = el.dataset.typ;
+        const basis = {
+          typ,
+          left:    el.style.left,
+          top:     el.style.top,
+          drehung: el.dataset.drehung || '0',
+          zIndex:  el.style.zIndex || '1'
+        };
+
+        if (typ === 'polaroid') {
+          elemente.push({
+            ...basis,
+            breite:       el.style.width,
+            bildUrl:      el.querySelector('.polaroid-foto').src,
+            beschriftung: el.querySelector('.polaroid-beschriftung').innerHTML
+          });
+
+        } else if (typ === 'klebezettel') {
+          const farbe = ['farbe-gelb','farbe-rosa','farbe-mint','farbe-blau']
+            .find(f => el.classList.contains(f)) || 'farbe-gelb';
+          elemente.push({
+            ...basis,
+            farbe,
+            text: el.querySelector('.klebezettel-text').innerHTML
+          });
+
+        } else if (typ === 'stempel') {
+          elemente.push({
+            ...basis,
+            breite:    el.style.width,
+            hoehe:     el.style.height,
+            farbe:     el.style.color,
+            svgIndex:  parseInt(el.dataset.svgIndex) || 0
+          });
+
+        } else if (typ === 'text') {
+          const inhalt = el.querySelector('.text-inhalt');
+          elemente.push({
+            ...basis,
+            breite:       el.style.width,
+            schriftIndex: parseInt(el.dataset.schrift) || 0, // Index in textSchriften (0=Serif, 1=Sans, 2=Hand)
+            groesse:      el.dataset.groesse || '22',
+            farbe:        inhalt.style.color,
+            inhalt:       inhalt.innerHTML
+          });
+        }
+      });
+
+      // Aktiven Hintergrund ermitteln
+      const hgKlasse = [...flaeche.classList].find(c => c.startsWith('bg-')) || '';
+
+      return {
+        version:      '1.0',
+        datum:        document.getElementById('datum').textContent,
+        tagessatz:    document.getElementById('tagessatz').textContent,
+        hintergrund:  hgKlasse,
+        reflexion:    document.getElementById('reflexion').value,
+        canvasBreite: CANVAS_BREITE,   // kanonische Canvas-Größe (532×616 = exakte Archiv-Vorschaufläche)
+        canvasHoehe:  CANVAS_HOEHE,
+        elemente,
+        bohnen:       bohnenAnzahl,    // gesammelte schöne Momente des Tages
+        versiegelt,
+        versiegelt_am: versiegelt ? new Date().toISOString() : null
+      };
+    }
+
+    // ---- JSON herunterladen ----
+    function jsonHerunterladen(daten, dateiname) {
+      const json   = JSON.stringify(daten, null, 2);
+      const blob   = new Blob([json], { type: 'application/json' });
+      const url    = URL.createObjectURL(blob);
+      const link   = document.createElement('a');
+      link.href     = url;
+      link.download = dateiname;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // ---- Seite aus JSON wiederherstellen ----
+    function seitenStandWiederherstellen(daten) {
+      const flaeche = document.getElementById('flaeche');
+
+      // Alle vorhandenen Elemente löschen (außer dem Hinweis)
+      flaeche.querySelectorAll('[data-typ]').forEach(el => el.remove());
+
+      // Bohnenzähler zurücksetzen und neu zeichnen
+      bohnenAnzahl = daten.bohnen || 0;
+      bohnenAnzeigen();
+
+      // Hintergrund setzen
+      alleHintergrundKlassen.forEach(k => flaeche.classList.remove(k));
+      if (daten.hintergrund) flaeche.classList.add(daten.hintergrund);
+
+      // Hintergrund-Panel aktiv markieren
+      document.querySelectorAll('.hintergrund-option').forEach(o => {
+        o.classList.toggle('aktiv', o.dataset.klasse === daten.hintergrund);
+      });
+
+      // Reflexion
+      document.getElementById('reflexion').value = daten.reflexion || '';
+
+      // Tagessatz (aus der Datei, nicht neu zufällig)
+      document.getElementById('tagessatz').textContent = daten.tagessatz || '';
+
+      // Elemente wiederherstellen
+      daten.elemente.forEach(d => {
+        if (d.typ === 'polaroid') {
+          polaroidErstellen(d.bildUrl, d);
+
+        } else if (d.typ === 'klebezettel') {
+          klebezettelErstellen(d);
+
+        } else if (d.typ === 'stempel') {
+          const svg = stempelDaten[d.svgIndex]?.svg || stempelDaten[0].svg;
+          stempelPlatzieren(svg, d);
+
+        } else if (d.typ === 'text') {
+          textElementErstellen(d);
+        }
+      });
+
+      hinweisAusblenden();
+
+      // Wenn versiegelt: Seite sperren
+      if (daten.versiegelt) {
+        seitenVersiegeltAnzeigen(daten.versiegelt_am);
+      }
+    }
+
+    // ---- Seite als versiegelt anzeigen ----
+    function seitenVersiegeltAnzeigen(zeitstempel) {
+      document.body.classList.add('versiegelt');
+
+      // Siegel-Badge auf der Fläche
+      const flaeche = document.getElementById('flaeche');
+      if (!flaeche.querySelector('.siegel-badge')) {
+        const badge = document.createElement('div');
+        badge.className = 'siegel-badge';
+        const datum = zeitstempel
+          ? new Date(zeitstempel).toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })
+          : '';
+        badge.innerHTML = `<div class="siegel-badge-icon">🔒</div><div>Versiegelt</div><div style="font-size:9px;opacity:0.8">${datum}</div>`;
+        flaeche.appendChild(badge);
+      }
+    }
+
+
+    // ===== Elemente-Ersteller um optionale "Daten"-Parameter erweitern =====
+    // (damit Laden funktioniert: Positionen aus JSON statt zufällig)
+
+    // Wir überschreiben die ursprünglichen Funktionen mit Wrapper-Logik:
+    const _polaroidOriginal = polaroidErstellen;
+    polaroidErstellen = function(imageDataUrl, daten = null) {
+      // Wenn daten übergeben: Position/Rotation aus JSON nehmen
+      // Das lösen wir intern in der Funktion über ein globales Flag
+      window._ladeVorgabe = daten;
+      _polaroidOriginal(imageDataUrl);
+      window._ladeVorgabe = null;
+    };
+
+    // Gleiches Prinzip für Klebezettel, Stempel, Text —
+    // aber wir bauen das sauberer: die Funktionen prüfen window._ladeVorgabe
+    // Die Originale wurden bereits oben definiert; wir ergänzen die Logik
+    // durch einen Patch am Anfang jeder Funktion.
+    // Einfacherer Weg: direkte Wiederherstellung nach dem Erstellen:
+
+    function elementAusDatenWiederherstellen(el, daten) {
+      if (!daten) return;
+      el.style.left      = daten.left;
+      el.style.top       = daten.top;
+      el.style.transform = `rotate(${daten.drehung}deg)`;
+      el.dataset.drehung = daten.drehung;
+      el.style.zIndex    = daten.zIndex || '1';
+    }
+
+    // Wir patchen die Erstell-Funktionen leicht um:
+    // Nach dem Erstellen suchen wir das letzte Element und passen es an.
+    const _klebezettelOriginal = klebezettelErstellen;
+    klebezettelErstellen = function(daten = null) {
+      _klebezettelOriginal();
+      if (daten) {
+        const flaeche = document.getElementById('flaeche');
+        const letzter = flaeche.querySelector('[data-typ="klebezettel"]:last-of-type');
+        if (letzter) {
+          elementAusDatenWiederherstellen(letzter, daten);
+          // Farbe setzen
+          klebezettelFarben.forEach(f => letzter.classList.remove(f.klasse));
+          letzter.classList.add(daten.farbe || 'farbe-gelb');
+          // Text setzen
+          const textEl = letzter.querySelector('.klebezettel-text');
+          if (textEl) textEl.innerHTML = daten.text || '';
+        }
+      }
+    };
+
+    const _stempelOriginal = stempelPlatzieren;
+    stempelPlatzieren = function(svgMarkup, daten = null) {
+      _stempelOriginal(svgMarkup);
+      if (daten) {
+        const flaeche = document.getElementById('flaeche');
+        const letzter = flaeche.querySelector('[data-typ="stempel"]:last-of-type');
+        if (letzter) {
+          elementAusDatenWiederherstellen(letzter, daten);
+          if (daten.breite) { letzter.style.width = daten.breite; letzter.style.height = daten.hoehe || daten.breite; }
+          if (daten.farbe)  letzter.style.color = daten.farbe;
+        }
+      }
+    };
+
+    const _textOriginal = textElementErstellen;
+    textElementErstellen = function(daten = null) {
+      _textOriginal();
+      if (daten) {
+        const flaeche = document.getElementById('flaeche');
+        const letzter = flaeche.querySelector('[data-typ="text"]:last-of-type');
+        if (letzter) {
+          elementAusDatenWiederherstellen(letzter, daten);
+          if (daten.breite) { letzter.style.width = daten.breite; letzter.style.maxWidth = daten.breite; }
+          const inhalt = letzter.querySelector('.text-inhalt');
+          if (inhalt) {
+            inhalt.innerHTML        = daten.inhalt || '';
+            // schriftIndex bevorzugen (neue Dateien), schrift als Fallback (alte Dateien)
+            const schriftCSS        = textSchriften[daten.schriftIndex ?? -1]?.css || daten.schrift || textSchriften[0].css;
+            inhalt.style.fontFamily = schriftCSS;
+            letzter.dataset.schrift = daten.schriftIndex ?? 0;
+            inhalt.style.fontSize   = (daten.groesse || '22') + 'px';
+            inhalt.style.color      = daten.farbe || '#2c2c2c';
+          }
+        }
+      }
+    };
+
+    // Polaroid-Patch (Bild + Beschriftung):
+    const _polaroidPatch = polaroidErstellen;
+    polaroidErstellen = function(imageDataUrl, daten = null) {
+      _polaroidPatch(imageDataUrl, daten);
+      if (daten) {
+        const flaeche = document.getElementById('flaeche');
+        const letzter = flaeche.querySelector('[data-typ="polaroid"]:last-of-type');
+        if (letzter) {
+          elementAusDatenWiederherstellen(letzter, daten);
+          if (daten.breite) letzter.style.width = daten.breite;
+          const beschr = letzter.querySelector('.polaroid-beschriftung');
+          if (beschr && daten.beschriftung) beschr.innerHTML = daten.beschriftung;
+        }
+      }
+    };
+
+
+    // ===================================================
+    //  GOOGLE DRIVE INTEGRATION
+    // ===================================================
+
+    // Client ID aus der Google Cloud Console (App: Scrapbook Journal)
+    const DRIVE_CLIENT_ID = '232003645726-knnvtq730l7aq9cqc5kb6gnc21968cj5.apps.googleusercontent.com';
+
+    // drive.file = nur Zugriff auf Dateien die DIESE App selbst erstellt hat
+    const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+
+    // Hier landen das OAuth-Token und die Ordner-IDs nach dem Login
+    let driveToken       = null;
+    let driveOrdnerIds   = null; // { aktuellId, versiegeltId }
+    let driveTokenClient = null;
+
+    // ---- GIS initialisieren (wird aufgerufen sobald das GIS-Script geladen ist) ----
+    function gisInit() {
+      driveTokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: DRIVE_CLIENT_ID,
+        scope:     DRIVE_SCOPE,
+        callback:  async (antwort) => {
+          if (antwort.error) {
+            console.error('Google-Auth-Fehler:', antwort);
+            alert('Google-Login fehlgeschlagen: ' + antwort.error);
+            return;
+          }
+          // Token speichern
+          driveToken = antwort.access_token;
+
+          // Ordner vorbereiten (erstellt sie falls noch nicht vorhanden)
+          driveOrdnerIds = await driveOrdnerVorbereiten();
+
+          // Desktop-Button auf "verbunden" umschalten
+          const btn = document.getElementById('btn-drive');
+          btn.classList.remove('drive-verbinden');
+          btn.classList.add('drive-verbunden');
+          btn.title = 'Mit Google Drive verbunden ✓';
+
+          // Mobile-Button ebenfalls umschalten
+          const mobileBtn = document.getElementById('mobile-btn-drive');
+          if (mobileBtn) {
+            mobileBtn.classList.add('drive-verbunden');
+            document.getElementById('mobile-drive-icon').textContent  = '✓';
+            document.getElementById('mobile-drive-label').textContent = 'Drive ✓';
+          }
+        }
+      });
+    }
+
+    // ---- Einen Ordner in Drive suchen oder neu anlegen ----
+    async function driveOrdnerFindenOderErstellen(name, parentId = null) {
+      // Suche: Ordner mit diesem Namen im angegebenen Eltern-Ordner
+      const eltern = parentId ? `'${parentId}' in parents and ` : `'root' in parents and `;
+      const query  = `${eltern}name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+
+      const suche = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`,
+        { headers: { Authorization: `Bearer ${driveToken}` } }
+      );
+      const sucheJson = await suche.json();
+
+      // Gefunden → ID zurückgeben
+      if (sucheJson.files && sucheJson.files.length > 0) {
+        return sucheJson.files[0].id;
+      }
+
+      // Nicht gefunden → Ordner neu anlegen
+      const body = { name, mimeType: 'application/vnd.google-apps.folder' };
+      if (parentId) body.parents = [parentId];
+
+      const erstellen = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method:  'POST',
+        headers: { Authorization: `Bearer ${driveToken}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body)
+      });
+      const neuerOrdner = await erstellen.json();
+      return neuerOrdner.id;
+    }
+
+    // ---- Journal-Ordnerstruktur sicherstellen: Journal/Aktuell + Journal/Versiegelt ----
+    async function driveOrdnerVorbereiten() {
+      const journalId   = await driveOrdnerFindenOderErstellen('Journal');
+      const aktuellId   = await driveOrdnerFindenOderErstellen('Aktuell',   journalId);
+      const versiegeltId = await driveOrdnerFindenOderErstellen('Versiegelt', journalId);
+      return { aktuellId, versiegeltId };
+    }
+
+    // ---- JSON-Datei in einen Drive-Ordner hochladen (oder vorhandene aktualisieren) ----
+    async function driveHochladen(daten, dateiname, ordnerId) {
+      const inhalt = JSON.stringify(daten, null, 2);
+
+      // Prüfen ob Datei schon existiert
+      const query = `name='${dateiname}' and '${ordnerId}' in parents and trashed=false`;
+      const check = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id)`,
+        { headers: { Authorization: `Bearer ${driveToken}` } }
+      );
+      const checkJson = await check.json();
+
+      if (checkJson.files && checkJson.files.length > 0) {
+        // Datei existiert → Inhalt aktualisieren
+        const fileId = checkJson.files[0].id;
+        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+          method:  'PATCH',
+          headers: { Authorization: `Bearer ${driveToken}`, 'Content-Type': 'application/json' },
+          body:    inhalt
+        });
+      } else {
+        // Datei neu anlegen (Multipart-Upload: Metadaten + Inhalt in einem Request)
+        const grenze  = 'journal_grenze_' + Date.now();
+        const meta    = JSON.stringify({ name: dateiname, parents: [ordnerId] });
+        const body    = `--${grenze}\r\nContent-Type: application/json\r\n\r\n${meta}\r\n--${grenze}\r\nContent-Type: application/json\r\n\r\n${inhalt}\r\n--${grenze}--`;
+
+        await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+          method:  'POST',
+          headers: {
+            Authorization:  `Bearer ${driveToken}`,
+            'Content-Type': `multipart/related; boundary=${grenze}`
+          },
+          body
+        });
+      }
+    }
+
+    // ---- Datei aus Journal/Aktuell löschen (nach dem Versiegeln) ----
+    async function driveAktuellLoeschen(dateiname) {
+      const { aktuellId } = driveOrdnerIds;
+      const query = `name='${dateiname}' and '${aktuellId}' in parents and trashed=false`;
+
+      const suche = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id)`,
+        { headers: { Authorization: `Bearer ${driveToken}` } }
+      );
+      const sucheJson = await suche.json();
+
+      if (!sucheJson.files || sucheJson.files.length === 0) return; // nichts zu löschen
+
+      // In den Papierkorb verschieben (sicherer als dauerhaftes Löschen)
+      await fetch(`https://www.googleapis.com/drive/v3/files/${sucheJson.files[0].id}`, {
+        method:  'DELETE',
+        headers: { Authorization: `Bearer ${driveToken}` }
+      });
+    }
+
+    // ---- Heutige Datei aus Journal/Aktuell laden ----
+    async function driveHeuteLaden() {
+      const { aktuellId } = driveOrdnerIds;
+      const heute  = new Date();
+      const datum  = `${heute.getFullYear()}-${String(heute.getMonth()+1).padStart(2,'0')}-${String(heute.getDate()).padStart(2,'0')}`;
+      const name   = `journal-${datum}.json`;
+
+      const query  = `name='${name}' and '${aktuellId}' in parents and trashed=false`;
+      const suche  = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`,
+        { headers: { Authorization: `Bearer ${driveToken}` } }
+      );
+      const sucheJson = await suche.json();
+
+      if (!sucheJson.files || sucheJson.files.length === 0) return null;
+
+      // Datei gefunden → Inhalt laden
+      const inhalt = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${sucheJson.files[0].id}?alt=media`,
+        { headers: { Authorization: `Bearer ${driveToken}` } }
+      );
+      return await inhalt.json();
+    }
+
+    // ---- Alle versiegelten JSONs aus Drive laden (für das Archiv) ----
+    async function driveArchivLaden() {
+      const { versiegeltId } = driveOrdnerIds;
+
+      // Alle Dateien im Versiegelt-Ordner auflisten
+      const liste = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(`'${versiegeltId}' in parents and trashed=false`)}&fields=files(id,name)&orderBy=name`,
+        { headers: { Authorization: `Bearer ${driveToken}` } }
+      );
+      const listeJson = await liste.json();
+      const dateien   = listeJson.files || [];
+
+      // Jede Datei einzeln herunterladen und als JSON parsen
+      const seiten = [];
+      for (const datei of dateien) {
+        const inhalt = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${datei.id}?alt=media`,
+          { headers: { Authorization: `Bearer ${driveToken}` } }
+        );
+        try {
+          const json = await inhalt.json();
+          seiten.push(json);
+        } catch { /* defekte Datei überspringen */ }
+      }
+      return seiten;
+    }
+
+    // ---- Drive-Button: Login auslösen ----
+    document.getElementById('btn-drive').addEventListener('click', () => {
+      if (driveToken) {
+        // Bereits verbunden → kurze Info
+        alert('Du bist bereits mit Google Drive verbunden! ☁️\nOrdner: Journal/Aktuell und Journal/Versiegelt');
+        return;
+      }
+      if (!driveTokenClient) {
+        alert('Google-Bibliothek lädt noch, bitte kurz warten...');
+        return;
+      }
+      // Login-Popup öffnen
+      driveTokenClient.requestAccessToken();
+    });
+
+
+    // ===== SPEICHERN-BUTTON =====
+    document.getElementById('btn-speichern').addEventListener('click', async () => {
+      const daten     = seitenStandSerializieren(false);
+      const heute     = new Date();
+      const dateiname = `journal-${heute.getFullYear()}-${String(heute.getMonth()+1).padStart(2,'0')}-${String(heute.getDate()).padStart(2,'0')}.json`;
+
+      if (driveToken && driveOrdnerIds) {
+        // Mit Drive verbunden → in den Aktuell-Ordner hochladen
+        try {
+          await driveHochladen(daten, dateiname, driveOrdnerIds.aktuellId);
+          // Kurzes visuelles Feedback am Button
+          const btn = document.getElementById('btn-speichern');
+          btn.textContent = '✓';
+          setTimeout(() => { btn.textContent = '💾'; }, 1500);
+        } catch (err) {
+          alert('Drive-Upload fehlgeschlagen: ' + err.message + '\nDie Datei wird lokal heruntergeladen.');
+          jsonHerunterladen(daten, dateiname);
+        }
+      } else {
+        // Kein Drive → wie bisher lokal herunterladen
+        jsonHerunterladen(daten, dateiname);
+      }
+    });
+
+
+    // ===== LADEN-BUTTON =====
+    document.getElementById('btn-laden').addEventListener('click', async () => {
+      if (driveToken && driveOrdnerIds) {
+        // Mit Drive verbunden → heutige Datei aus Aktuell laden
+        try {
+          const daten = await driveHeuteLaden();
+          if (daten) {
+            seitenStandWiederherstellen(daten);
+            return;
+          } else {
+            // Keine heutige Datei in Drive → auf lokalen Picker zurückfallen
+            alert('Keine Datei für heute in Drive/Aktuell gefunden.\nBitte lokal laden.');
+          }
+        } catch (err) {
+          alert('Drive-Laden fehlgeschlagen: ' + err.message + '\nBitte lokal laden.');
+        }
+      }
+      // Kein Drive oder Fallback → lokaler Datei-Picker
+      document.getElementById('laden-input').click();
+    });
+
+    document.getElementById('laden-input').addEventListener('change', (e) => {
+      const datei = e.target.files[0];
+      if (!datei) return;
+      const leser = new FileReader();
+      leser.onload = (event) => {
+        try {
+          const daten = JSON.parse(event.target.result);
+          seitenStandWiederherstellen(daten);
+        } catch(err) {
+          alert('Fehler beim Laden: Die Datei scheint kein gültiges Journal-Format zu sein.');
+        }
+      };
+      leser.readAsText(datei);
+      e.target.value = ''; // Reset
+    });
+
+
+    // ===== BOHNENHAUFEN: Render + Klick =====
+
+    // Deterministischer Pseudo-Zufallsgenerator (seed-basiert).
+    // Wichtig: gleicher seed → gleiche Zahl → Haufen springt nicht bei jedem Neuzeichnen.
+    function seededRand(seed) {
+      const x = Math.sin(seed + 1) * 10000;
+      return x - Math.floor(x); // Wert zwischen 0 und 1
+    }
+
+    // Zeichnet den aktuellen Bohnenhaufen auf die Canvas als Pyramiden-Haufen
+    function bohnenAnzeigen() {
+      const flaeche = document.getElementById('flaeche');
+
+      // Alte Anzeige entfernen
+      const alt = flaeche.querySelector('.bohnen-anzeige');
+      if (alt) alt.remove();
+      if (bohnenAnzahl === 0) return;
+
+      const anzeige = document.createElement('div');
+      anzeige.className = 'bohnen-anzeige';
+
+      // Zähler-Text
+      const zaehler = document.createElement('div');
+      zaehler.className = 'bohnen-zaehler';
+      zaehler.textContent = bohnenAnzahl;
+      anzeige.appendChild(zaehler);
+
+      // ---- Maße ----
+      // SVG viewBox: 380×230 → bei BEAN_W=38px ist Höhe ~23px
+      const BEAN_W = 38;
+      const BEAN_H = Math.round(BEAN_W * 230 / 380); // ≈ 23px
+      // Bohnen überlappen sich: horizontal 80%, vertikal 58% des Abstands
+      const STEP_X = Math.round(BEAN_W * 0.80); // ≈ 30px
+      const STEP_Y = Math.round(BEAN_H * 0.60); // ≈ 14px
+
+      // ---- Reihen berechnen: breiteste Reihe unten, schmäler nach oben ----
+      // Ergebnis: rows[0] = Grundreihe (vorne/unten), rows[last] = Spitze (hinten/oben)
+      function buildRows(total) {
+        const base = Math.max(3, Math.ceil(Math.sqrt(total * 2)));
+        const rows = [];
+        let remaining = total;
+        let w = base;
+        while (remaining > 0) {
+          const n = Math.min(remaining, Math.max(1, w));
+          rows.push(n);
+          remaining -= n;
+          w = Math.max(1, Math.floor(w * 0.72)); // jede Reihe ~28% schmäler
+        }
+        return rows;
+      }
+
+      const rows = buildRows(bohnenAnzahl);
+      const base = rows[0]; // breiteste Reihe
+
+      // Container-Größe: breit genug für die Grundreihe + etwas Puffer für Nudges
+      const pileW = (base - 1) * STEP_X + BEAN_W + 16;
+      const pileH = (rows.length - 1) * STEP_Y + BEAN_H + 12;
+
+      const haufen = document.createElement('div');
+      haufen.className = 'bohnen-haufen';
+      haufen.style.width  = pileW + 'px';
+      haufen.style.height = pileH + 'px';
+
+      // ---- Bohnen rendern ----
+      // Hinterste Reihe (rows[last], kleinstes y, niedrigstes z) zuerst einsetzen,
+      // vorderste Reihe (rows[0], größtes y, höchstes z) zuletzt → stapelt sich richtig
+      let beanIdx = 0;
+      for (let ri = rows.length - 1; ri >= 0; ri--) {
+        const count  = rows[ri];
+        const rowW   = (count - 1) * STEP_X;
+        const startX = (pileW - BEAN_W - rowW) / 2; // Reihe horizontal zentrieren
+
+        // y: Reihe 0 (vorne) hat das größte y (liegt unten im Bild)
+        const y    = (rows.length - 1 - ri) * STEP_Y;
+        // z-Index: vordere Reihen liegen oben drauf
+        const zBase = (rows.length - ri) * 20;
+
+        for (let j = 0; j < count; j++) {
+          const img = document.createElement('img');
+          img.src = 'img/Bohne.svg';
+          img.className = 'bohne';
+          img.draggable = false;
+
+          // Kleine seeded-zufällige Abweichungen — Haufen wirkt organisch, nicht Raster
+          const nudgeX = (seededRand(beanIdx * 4)     - 0.5) * 8;  // ±4px
+          const nudgeY = (seededRand(beanIdx * 4 + 1) - 0.5) * 5;  // ±2.5px
+          const rot    = (seededRand(beanIdx * 4 + 2) - 0.5) * 44; // ±22° — Bohnen liegen flach
+          const z      = zBase + j;
+
+          img.style.cssText = `
+            left:${(startX + j * STEP_X + nudgeX).toFixed(1)}px;
+            top:${(y + nudgeY).toFixed(1)}px;
+            width:${BEAN_W}px;
+            z-index:${z};
+            transform:rotate(${rot.toFixed(1)}deg);
+            transform-origin:center center;
+          `;
+          haufen.appendChild(img);
+          beanIdx++;
+        }
+      }
+
+      anzeige.appendChild(haufen);
+      flaeche.appendChild(anzeige);
+    }
+
+    // Klick auf Bohnen-Button: Zähler erhöhen + Button kurz animieren
+    document.getElementById('btn-bohne').addEventListener('click', () => {
+      bohnenAnzahl++;
+      bohnenAnzeigen();
+
+      // Puls-Animation auslösen (CSS keyframe, wird nach Ende entfernt)
+      const btn = document.getElementById('btn-bohne');
+      btn.classList.remove('gepulst');
+      // Mini-Timeout damit der Browser die Klasse wirklich neu setzt
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => btn.classList.add('gepulst'));
+      });
+      btn.addEventListener('animationend', () => btn.classList.remove('gepulst'), { once: true });
+    });
+
+
+    // ===== VERSIEGELN-BUTTON =====
+    document.getElementById('btn-versiegeln').addEventListener('click', () => {
+      document.getElementById('versiegeln-modal').classList.add('sichtbar');
+    });
+
+    document.getElementById('modal-abbrechen').addEventListener('click', () => {
+      document.getElementById('versiegeln-modal').classList.remove('sichtbar');
+    });
+
+    document.getElementById('modal-bestaetigen').addEventListener('click', async () => {
+      document.getElementById('versiegeln-modal').classList.remove('sichtbar');
+
+      const daten     = seitenStandSerializieren(true); // versiegelt: true
+      const heute     = new Date();
+      const dateiname = `journal-${heute.getFullYear()}-${String(heute.getMonth()+1).padStart(2,'0')}-${String(heute.getDate()).padStart(2,'0')}-versiegelt.json`;
+
+      if (driveToken && driveOrdnerIds) {
+        // Mit Drive verbunden → in den Versiegelt-Ordner hochladen
+        try {
+          await driveHochladen(daten, dateiname, driveOrdnerIds.versiegeltId);
+
+          // Unversiegelte Version aus Aktuell löschen (die war ja der Entwurf)
+          const heute     = new Date();
+          const aktuellName = `journal-${heute.getFullYear()}-${String(heute.getMonth()+1).padStart(2,'0')}-${String(heute.getDate()).padStart(2,'0')}.json`;
+          await driveAktuellLoeschen(aktuellName);
+        } catch (err) {
+          alert('Drive-Upload fehlgeschlagen: ' + err.message + '\nDie Datei wird lokal heruntergeladen.');
+          jsonHerunterladen(daten, dateiname);
+        }
+      } else {
+        // Kein Drive → wie bisher lokal herunterladen
+        jsonHerunterladen(daten, dateiname);
+      }
+
+      // Seite sofort sperren
+      seitenVersiegeltAnzeigen(daten.versiegelt_am);
+    });
+
+    // Modal schließen bei Klick auf den Overlay-Hintergrund
+    document.getElementById('versiegeln-modal').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('versiegeln-modal')) {
+        document.getElementById('versiegeln-modal').classList.remove('sichtbar');
+      }
+    });
+
+
+    // ===================================================
+    //  ARCHIV — BUCH MIT PAGE FLIP
+    // ===================================================
+
+    let archivSeiten    = []; // alle geladenen Seiten (sortiert nach Datum)
+    let aktuellesDoppel = 0;  // Index der linken Seite im aktuellen Spread (immer gerade)
+    let istAmBlaettern  = false; // verhindert Doppelklicks während Animation
+
+    // ---- Hintergrundfarbe aus CSS-Klasse ermitteln ----
+    const hintergrundFarben = {
+      '':                  '#fdfaf5',
+      'bg-pergament':      '#f4ead0',
+      'bg-weiss':          '#ffffff',
+      'bg-stahl':          '#b0b8bf',
+      'bg-wiese':          '#d4e8c2',
+      'bg-rost':           '#8b3a2a',
+      // Foto-Hintergründe: Näherungsfarbe für die Minivorschau im Archiv
+      'bg-foto-pergament': '#d4b896',
+      'bg-foto-wiese':     '#5a8a3c',
+      'bg-foto-rost':      '#7a3020',
+      'bg-foto-stahl':     '#7a8a95',
+      'bg-foto-wasser':    '#2a5a8a',
+    };
+
+    // ---- HTML-Tags entfernen ----
+    function htmlZuText(html) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = html || '';
+      return tmp.textContent || '';
+    }
+
+    // Die Buchseiten-Größe (580×820) passt fast zum Canvas-Seitenverhältnis (750×1060).
+    // Um exaktes Seitenverhältnis zu gewährleisten, berechnen wir Höhe basierend auf Breite.
+    // Canvas-Verhältnis: 750 / 1060 ≈ 0.708
+    function seitenPixelGroesse() {
+      // Basis-Breite: 44% der Viewport-Breite, max 580px
+      const basisBreite = Math.min(window.innerWidth * 0.44, 580);
+      // Höhe basierend auf Canvas-Seitenverhältnis berechnen (750:1060)
+      const hoehePx = basisBreite * (1060 / 750);
+      // Nach Abzug von Padding und Headern
+      const breite = basisBreite - 48;
+      const hoehe  = Math.min(hoehePx, window.innerHeight * 0.88) - 204;
+      return { breite, hoehe };
+    }
+
+    // ---- Echte Mini-Render: Elemente skaliert an ihrer echten Position ----
+    function seitenVorschauHTML(daten) {
+      if (!daten) return '<div style="color:#bbb;font-size:12px;text-align:center;margin-top:40px">Leere Seite</div>';
+
+      const bgFarbe = hintergrundFarben[daten.hintergrund] || '#fdfaf5';
+      const { breite, hoehe } = seitenPixelGroesse();
+
+      // Echte Canvas-Größe aus JSON (neu gespeicherte Dateien), Fallback: aus Positionen schätzen
+      let vBreite = daten.canvasBreite || 0;
+      let vHoehe  = daten.canvasHoehe  || 0;
+      if (!vBreite || !vHoehe) {
+        // Alte Dateien ohne canvasBreite/canvasHoehe: aus Element-Positionen schätzen
+        vBreite = 700; vHoehe = 500;
+        (daten.elemente || []).forEach(e => {
+          vBreite = Math.max(vBreite, (parseInt(e.left) || 0) + (parseInt(e.breite) || 220));
+          vHoehe  = Math.max(vHoehe,  (parseInt(e.top)  || 0) + 220);
+        });
+      }
+
+      // ---- TRANSFORM-SCALE ANSATZ ----
+      // Statt Positionen und Größen manuell umzurechnen:
+      // 1. Elemente in Originalgröße + Originalposition rendern
+      // 2. Den ganzen Container per CSS transform:scale() schrumpfen
+      // → Proportionen stimmen IMMER, wie ein verkleinertes Foto
+      const scale = Math.min(breite / vBreite, hoehe / vHoehe);
+
+      // Elemente in ORIGINALGRÖSSE rendern (keine manuelle Skalierung)
+      const elementeHTML = (daten.elemente || []).map(e => {
+        const x    = parseInt(e.left) || 0;
+        const y    = parseInt(e.top)  || 0;
+        const dreh = parseFloat(e.drehung || 0);
+        const basis = `position:absolute;left:${x}px;top:${y}px;
+          transform:rotate(${dreh}deg);transform-origin:top left;`;
+
+        if (e.typ === 'polaroid') {
+          const w = Math.max(40, parseInt(e.breite) || 200);
+          const beschr = htmlZuText(e.beschriftung || '');
+          return `<div style="${basis}width:${w}px;background:#f8f4ee;
+            padding:3px 3px 12px;
+            box-shadow:1px 2px 6px rgba(0,0,0,0.25);">
+            <div style="width:100%;background:#d0ccc8;
+              display:flex;align-items:center;justify-content:center;
+              font-size:16px;overflow:hidden;">
+              ${e.bildUrl ? `<img src="${e.bildUrl}" style="width:100%;height:auto;display:block;">` : '🖼'}
+            </div>
+            <div style="font-family:'Caveat',cursive;font-size:10px;
+              color:#4a4035;padding-top:2px;">${beschr}</div>
+          </div>`;
+
+        } else if (e.typ === 'klebezettel') {
+          const farbenMap = {'farbe-gelb':'#fff176','farbe-rosa':'#f8bbd0','farbe-mint':'#c8e6c9','farbe-blau':'#bbdefb'};
+          const bg = farbenMap[e.farbe] || '#fff176';
+          return `<div style="${basis}background:${bg};
+            width:160px;min-height:90px;
+            padding:5px;
+            box-shadow:1px 2px 4px rgba(0,0,0,0.15);
+            font-family:'Caveat',cursive;font-size:13px;
+            color:#333;line-height:1.35;word-break:break-word;">
+            ${htmlZuText(e.text || '')}
+          </div>`;
+
+        } else if (e.typ === 'stempel') {
+          const w = Math.max(16, parseInt(e.breite) || 80);
+          const svg = stempelDaten[parseInt(e.svgIndex) || 0]?.svg || '';
+          return `<div style="${basis}width:${w}px;height:${w}px;
+            color:${e.farbe || '#c0392b'};opacity:0.88;">
+            ${svg}
+          </div>`;
+
+        } else if (e.typ === 'text') {
+          const fs       = parseInt(e.groesse) || 22;
+          const maxW     = e.breite ? `${parseInt(e.breite)}px` : '200px';
+          const schriftCSS = textSchriften[e.schriftIndex ?? 0]?.css || textSchriften[0].css;
+          return `<div style="${basis}font-family:${schriftCSS};
+            font-size:${fs}px;color:${e.farbe || '#2c2c2c'};
+            line-height:1.4;max-width:${maxW};word-break:break-word;">
+            ${e.inhalt || ''}
+          </div>`;
+        }
+        return '';
+      }).join('');
+
+      const siegelBadge = daten.versiegelt
+        ? `<div class="seite-siegel">🔒 versiegelt</div>` : '';
+
+      // Bohnenhaufen in der Vorschau: gleicher Pyramiden-Algorithmus, nur kleiner
+      const bohnenVorschau = (() => {
+        if (!daten.bohnen || daten.bohnen === 0) return '';
+        const total = Math.min(daten.bohnen, 25); // max 25 in der Vorschau
+        const BW    = 16;
+        const BH    = Math.round(BW * 230 / 380); // ~10px
+        const SX    = Math.round(BW * 0.80);       // ~13px
+        const SY    = Math.round(BH * 0.60);       // ~6px
+
+        // Reihen bauen (gleiche Logik wie im Haupt-Render)
+        const rows = [];
+        let rem = total, w = Math.max(3, Math.ceil(Math.sqrt(total * 2)));
+        while (rem > 0) {
+          const n = Math.min(rem, Math.max(1, w));
+          rows.push(n); rem -= n;
+          w = Math.max(1, Math.floor(w * 0.72));
+        }
+        const base = rows[0];
+        const pW = (base - 1) * SX + BW + 8;
+        const pH = (rows.length - 1) * SY + BH + 6;
+
+        let bImgs = '';
+        let bi = 0;
+        for (let ri = rows.length - 1; ri >= 0; ri--) {
+          const cnt = rows[ri];
+          const sx  = (pW - BW - (cnt - 1) * SX) / 2;
+          const y   = (rows.length - 1 - ri) * SY;
+          const zB  = (rows.length - ri) * 20;
+          for (let j = 0; j < cnt; j++) {
+            const nx  = (seededRand(bi * 4)     - 0.5) * 4;
+            const ny  = (seededRand(bi * 4 + 1) - 0.5) * 3;
+            const rot = (seededRand(bi * 4 + 2) - 0.5) * 44;
+            bImgs += `<img src="img/Bohne.svg" draggable="false" style="position:absolute;
+              left:${(sx + j*SX + nx).toFixed(1)}px;top:${(y+ny).toFixed(1)}px;
+              width:${BW}px;z-index:${zB+j};
+              transform:rotate(${rot.toFixed(1)}deg);transform-origin:center center;">`;
+            bi++;
+          }
+        }
+        return `<div style="position:absolute;bottom:6px;left:6px;z-index:5;
+            pointer-events:none;display:flex;flex-direction:column;align-items:center;">
+          <div style="font-family:'Caveat',cursive;font-size:9px;color:#5c3d1e;
+            font-weight:600;text-align:center;margin-bottom:2px;">${daten.bohnen}</div>
+          <div style="position:relative;width:${pW}px;height:${pH}px;">${bImgs}</div>
+        </div>`;
+      })();
+
+      return `
+        <div class="seite-datum">${daten.datum || ''}</div>
+        <div class="seite-tagessatz">${daten.tagessatz || ''}</div>
+        <div class="seite-vorschau-flaeche" style="background:${bgFarbe};">
+          ${siegelBadge}
+          ${bohnenVorschau}
+          <div style="position:absolute;inset:0;overflow:hidden;">
+            <div style="width:${vBreite}px;height:${vHoehe}px;
+              transform:scale(${scale.toFixed(5)});transform-origin:top left;
+              position:relative;">
+              ${elementeHTML}
+            </div>
+          </div>
+        </div>
+        <div class="seite-reflexion ${daten.reflexion ? '' : 'seite-reflexion-leer'}">
+          <div class="seite-reflexion-label">Was habe ich heute mitgenommen?</div>
+          ${daten.reflexion || '–'}
+        </div>
+      `;
+    }
+
+    // ---- Aktuelles Doppel anzeigen ----
+    function doppelAnzeigen() {
+      const links  = archivSeiten[aktuellesDoppel]     || null;
+      const rechts = archivSeiten[aktuellesDoppel + 1] || null;
+
+      document.getElementById('seite-links').innerHTML  = seitenVorschauHTML(links);
+      document.getElementById('seite-rechts').innerHTML = seitenVorschauHTML(rechts);
+
+      if (!rechts) {
+        document.getElementById('seite-rechts').classList.add('leer');
+      } else {
+        document.getElementById('seite-rechts').classList.remove('leer');
+      }
+
+      // Seitenzahl
+      const gesamt = archivSeiten.length;
+      const links_nr  = aktuellesDoppel + 1;
+      const rechts_nr = Math.min(aktuellesDoppel + 2, gesamt);
+      document.getElementById('archiv-seitenzahl').textContent =
+        `${links_nr}${rechts_nr > links_nr ? '–' + rechts_nr : ''} / ${gesamt}`;
+
+      // Pfeile
+      document.getElementById('btn-zurueck').disabled = aktuellesDoppel <= 0;
+      document.getElementById('btn-vor').disabled     = aktuellesDoppel + 2 >= archivSeiten.length;
+    }
+
+    // ---- Vorwärts blättern ----
+    function vorBlaettern() {
+      if (istAmBlaettern || aktuellesDoppel + 2 >= archivSeiten.length) return;
+      istAmBlaettern = true;
+
+      const flip   = document.getElementById('flip-seite');
+      const vorder = document.getElementById('flip-vorder');
+      const rueck  = document.getElementById('flip-rueck');
+
+      // Vorderseite = aktuelle rechte Seite
+      vorder.innerHTML = seitenVorschauHTML(archivSeiten[aktuellesDoppel + 1]);
+      // Rückseite = nächste linke Seite (Seite die nach dem Flip links erscheint)
+      rueck.innerHTML  = seitenVorschauHTML(archivSeiten[aktuellesDoppel + 2]);
+
+      flip.style.display = 'block';
+      flip.className     = 'flip-seite flip-vorwärts';
+
+      setTimeout(() => {
+        aktuellesDoppel += 2;
+        flip.style.display = 'none';
+        flip.className     = 'flip-seite';
+        doppelAnzeigen();
+        istAmBlaettern = false;
+      }, 660);
+    }
+
+    // ---- Rückwärts blättern ----
+    function zurueckBlaettern() {
+      if (istAmBlaettern || aktuellesDoppel <= 0) return;
+      istAmBlaettern = true;
+
+      const flip   = document.getElementById('flip-seite');
+      const vorder = document.getElementById('flip-vorder');
+      const rueck  = document.getElementById('flip-rueck');
+
+      // Vorderseite = vorherige rechte Seite (was nach dem Flip rechts erscheint)
+      vorder.innerHTML = seitenVorschauHTML(archivSeiten[aktuellesDoppel - 1]);
+      // Rückseite = aktuelle linke Seite
+      rueck.innerHTML  = seitenVorschauHTML(archivSeiten[aktuellesDoppel]);
+
+      // Beim Rückwärtsblättern: Flip über die linke Seite, von links nach rechts
+      flip.style.left    = '0px';
+      flip.style.display = 'block';
+      flip.className     = 'flip-seite flip-rückwärts';
+
+      setTimeout(() => {
+        aktuellesDoppel -= 2;
+        flip.style.display = 'none';
+        flip.style.left    = '';
+        flip.className     = 'flip-seite';
+        doppelAnzeigen();
+        istAmBlaettern = false;
+      }, 660);
+    }
+
+    // ---- JSON-Dateien laden und als Seiten einfügen ----
+    function archivDateienLaden(dateien) {
+      const leseVersprechen = Array.from(dateien).map(datei => {
+        return new Promise((resolve) => {
+          const leser = new FileReader();
+          leser.onload = e => {
+            try { resolve(JSON.parse(e.target.result)); }
+            catch { resolve(null); }
+          };
+          leser.readAsText(datei);
+        });
+      });
+
+      Promise.all(leseVersprechen).then(ergebnisse => {
+        const neuSeiten = ergebnisse.filter(Boolean);
+
+        // Alle neuen Seiten hinzufügen.
+        // Echter Inhaltsvergleich: JSON-Fingerprint der Elemente verhindert
+        // dass exakt dieselbe Datei zweimal geladen wird — aber verschiedene
+        // Saves desselben Tages erscheinen alle (das ist gewollt).
+        neuSeiten.forEach(seite => {
+          const fingerprint = JSON.stringify({
+            datum: seite.datum,
+            versiegelt_am: seite.versiegelt_am,
+            elementanzahl: (seite.elemente || []).length,
+            reflexion: seite.reflexion || ''
+          });
+          const existiert = archivSeiten.some(s => {
+            const sfp = JSON.stringify({
+              datum: s.datum,
+              versiegelt_am: s.versiegelt_am,
+              elementanzahl: (s.elemente || []).length,
+              reflexion: s.reflexion || ''
+            });
+            return sfp === fingerprint;
+          });
+          if (!existiert) archivSeiten.push(seite);
+        });
+
+        // Nach versiegelt_am sortieren (versiegelte zuerst/älter), dann nach datum-String
+        archivSeiten.sort((a, b) => {
+          const da = a.versiegelt_am || a.datum || '';
+          const db = b.versiegelt_am || b.datum || '';
+          return da.localeCompare(db);
+        });
+
+        aktuellesDoppel = 0;
+
+        // UI umschalten
+        document.getElementById('archiv-leer').style.display   = 'none';
+        document.getElementById('buch-szene').style.display    = 'flex';
+
+        doppelAnzeigen();
+      });
+    }
+
+    // ---- Archiv öffnen/schließen ----
+    document.getElementById('btn-archiv').addEventListener('click', async () => {
+      document.getElementById('archiv-overlay').classList.add('sichtbar');
+
+      if (driveToken && driveOrdnerIds) {
+        // Mit Drive verbunden → automatisch aus Journal/Versiegelt laden
+        try {
+          const seiten = await driveArchivLaden();
+          if (seiten.length > 0) {
+            // Seiten in das Archiv einfügen (mit Dedup-Logik wiederverwenden)
+            archivDateienLaden(seiten.map(s => new File(
+              [JSON.stringify(s)], s.datum + '.json', { type: 'application/json' }
+            )));
+          } else {
+            document.getElementById('archiv-leer').style.display = 'flex';
+            document.getElementById('buch-szene').style.display  = 'none';
+          }
+        } catch (err) {
+          alert('Archiv konnte nicht von Drive geladen werden: ' + err.message);
+        }
+        return;
+      }
+
+      // Kein Drive → vorhandene Seiten zeigen oder leeren Zustand
+      if (archivSeiten.length > 0) {
+        document.getElementById('archiv-leer').style.display  = 'none';
+        document.getElementById('buch-szene').style.display   = 'flex';
+        doppelAnzeigen();
+      }
+    });
+
+    document.getElementById('archiv-schliessen').addEventListener('click', () => {
+      document.getElementById('archiv-overlay').classList.remove('sichtbar');
+    });
+
+    // ---- Datei-Input verdrahten ----
+    const archivInput = document.getElementById('archiv-input');
+
+    document.getElementById('archiv-dateien-btn').addEventListener('click', () => archivInput.click());
+    document.getElementById('archiv-mehr-laden').addEventListener('click', () => archivInput.click());
+
+    archivInput.addEventListener('change', (e) => {
+      if (e.target.files.length) archivDateienLaden(e.target.files);
+      e.target.value = '';
+    });
+
+    // ---- Pfeile ----
+    document.getElementById('btn-vor').addEventListener('click',     vorBlaettern);
+    document.getElementById('btn-zurueck').addEventListener('click', zurueckBlaettern);
+
+    // ---- Rechte Seite anklicken = vorblättern ----
+    document.getElementById('seite-rechts').addEventListener('click', vorBlaettern);
+
+
+    // =====================================================
+    //  AUTOSAVE + AUTOLOAD (localStorage)
+    // =====================================================
+
+    const AUTOSAVE_KEY = 'journal_autoSave';
+
+    // Speichert den aktuellen Seitenstand im Browser (debounced: max einmal pro 1.5s)
+    let autoSaveTimer = null;
+    function autoSpeichern() {
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(() => {
+        try {
+          const daten = seitenStandSerializieren(false);
+          localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(daten));
+        } catch (e) {
+          // localStorage voll oder blockiert — kein Absturz
+        }
+      }, 1500);
+    }
+
+    // Beobachtet Änderungen auf der Fläche und triggert Auto-Save
+    const autoSaveObserver = new MutationObserver(autoSpeichern);
+    autoSaveObserver.observe(document.getElementById('flaeche'), {
+      childList: true,      // Elemente hinzugefügt/entfernt
+      subtree:   true,      // auch tief verschachtelte Änderungen
+      attributes: true,     // Positionsänderungen (style)
+      characterData: true   // Textänderungen in Klebezetteln
+    });
+    // Auch Reflexionsfeld beobachten
+    document.getElementById('reflexion').addEventListener('input', autoSpeichern);
+
+    // Automatisches Laden aus localStorage (nur auf Mobilgeräten)
+    function mobileAutoLaden() {
+      if (window.innerWidth > 768) return; // nur auf Handy
+      try {
+        const gespeichert = localStorage.getItem(AUTOSAVE_KEY);
+        if (!gespeichert) return;
+        const daten = JSON.parse(gespeichert);
+        // Nur laden wenn das Datum von heute ist (keine veraltete Seite laden)
+        const heute = new Date().toLocaleDateString('de-DE',
+          { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        if (daten.datum === heute) {
+          seitenStandWiederherstellen(daten);
+        }
+      } catch (e) { /* korrupter Speicher → ignorieren */ }
+    }
+    // Nach kurzem Timeout aufrufen (Canvas-Initialisierung muss fertig sein)
+    setTimeout(mobileAutoLaden, 200);
+
+
+    // =====================================================
+    //  BOHNEN — localStorage-SYNC (für bohne.html)
+    // =====================================================
+
+    function bohnenLsKey() {
+      // Tages-basierter Key: 'journal_bohnen_2026-03-24'
+      return 'journal_bohnen_' + new Date().toISOString().slice(0, 10);
+    }
+
+    function bohnenAusLsSpeichern() {
+      try {
+        localStorage.setItem(bohnenLsKey(), String(bohnenAnzahl));
+      } catch (e) {}
+    }
+
+    function bohnenAusLsLaden() {
+      try {
+        const n = parseInt(localStorage.getItem(bohnenLsKey()) || '0');
+        if (n > 0 && bohnenAnzahl === 0) {
+          // Nur übernehmen wenn die Seite noch keine Bohnen hat
+          // (z.B. nach Tap auf bohne.html-Shortcut, dann Journal geöffnet)
+          bohnenAnzahl = n;
+          bohnenAnzeigen();
+        }
+      } catch (e) {}
+    }
+
+    // Beim Laden prüfen ob bohne.html schon Bohnen gezählt hat
+    setTimeout(bohnenAusLsLaden, 300);
+
+    // localStorage-Sync auslösen wenn Fenster wieder aktiv wird
+    // (Nutzer war in bohne.html und kommt zurück)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) bohnenAusLsLaden();
+    });
+
+
+    // =====================================================
+    //  MOBILE BOTTOM-BAR — Button-Events
+    // =====================================================
+
+    // Bohne — gleiche Logik wie Desktop-Button
+    document.getElementById('mobile-btn-bohne').addEventListener('click', () => {
+      document.getElementById('btn-bohne').click();
+      bohnenAusLsSpeichern();
+    });
+
+    // Klebezettel
+    document.getElementById('mobile-btn-klebezettel').addEventListener('click', () => {
+      document.getElementById('btn-klebezettel').click();
+    });
+
+    // Foto/Polaroid
+    document.getElementById('mobile-btn-polaroid').addEventListener('click', () => {
+      document.getElementById('btn-polaroid').click();
+    });
+
+    // Mobile Drive-Button: löst denselben Login-Flow aus wie der Desktop-Button
+    document.getElementById('mobile-btn-drive').addEventListener('click', () => {
+      document.getElementById('btn-drive').click();
+    });
+
+    // Speichern auf Mobile: Feedback-Icon wechseln (💾 → ✓ → 💾)
+    document.getElementById('mobile-btn-speichern').addEventListener('click', async () => {
+      await document.getElementById('btn-speichern').click();
+      // Kleines visuelles Feedback
+      const icon = document.getElementById('mobile-speichern-icon');
+      icon.textContent = '✓';
+      setTimeout(() => { icon.textContent = '💾'; }, 1500);
+    });
+
+    // Desktop-Bohnen-Button auch LS-sync triggern
+    document.getElementById('btn-bohne').addEventListener('click', bohnenAusLsSpeichern, true);
+
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,25 @@
+Projekt: Scrapbook-Journal PWA
+Wir bauen eine PWA — ein digitales Scrapbook-Journal. Eine Seite pro Tag, frei gestaltbar, abends eingefroren, durchblätterbar als Archiv.
+Konzept:
+Kein Pastell-Achtsamkeits-Tagebuch. Ein digitales Werkzeug für Menschen die denken, nicht basteln. Trotzdem visuell — aber auf eigene Art.
+Aufbau einer Seite:
+
+Oben: Automatisches Datum + automatisch generierter Tagessatz (stoisch/philosophisch angehaucht, z.B. "Erwarte ich das Mögliche oder was ich will?")
+Mitte: Freie Gestaltungsfläche mit wählbarem Hintergrund (Pergament, Stahl, Wiese, Weiß, Rost etc.), Textelemente in verschiedenen Schriftarten und Farben, Klebezettel-Optik, Polaroid-Fotos (schräg, größenveränderbar), Stempel als SVGs (Blümchen, Schmetterling, Werkzeugkasten, Notenschlüssel etc.)
+Unten: Fester Reflexionsbereich: "Was habe ich heute mitgenommen?"
+Rechte Sidebar: Werkzeugauswahl — Stempel, Schriftarten, Hintergründe, Polaroid-Upload
+
+Abend-Workflow:
+Seite wird eingefroren (unveränderlich gespeichert). Archiv-Ansicht zum Durchblättern vergangener Seiten.
+Architektur:
+
+PWA (läuft auf Mac-Browser + Samsung S22 Ultra)
+Speicherformat: JSON pro Tag
+Sync via Microsoft Graph API → OneDrive (Microsoft 365 Basic, voller API-Zugriff)
+Lokaler OneDrive-Ordner auf Mac synct automatisch mit
+Kein eigener Server, kein Webspace, keine Datenbank
+
+Entwicklungsstrategie:
+Erst die Gestaltungsfläche bauen und das Feeling testen — ohne OneDrive. Sync kommt in Runde 2.
+Ingrid arbeitet mit:
+Blondinen-Programmierbegleitung-Stil. STOP = alles stehenbleiben. ECHO = aktuellen Stand zusammenfassen. >> = nächster Schritt. Kein Tutorial-Modus, pragmatisch und ergebnisorientiert.

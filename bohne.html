@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Schöner Moment</title>
+
+  <link rel="manifest" href="bohne-manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Bohne 🫘">
+
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital@0;1&family=Caveat:wght@400;600&display=swap" rel="stylesheet">
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      min-height: 100dvh; /* dynamic viewport height für iPhone */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #fdfaf5;
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* ===== HINTERGRUND: dezentes Raster wie Notizbuch ===== */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,0,0,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,0,0,0.025) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    /* ===== DATUM OBEN ===== */
+    .datum {
+      position: fixed;
+      top: max(20px, env(safe-area-inset-top, 20px));
+      left: 0; right: 0;
+      text-align: center;
+      font-family: 'Playfair Display', serif;
+      font-size: 13px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #bbb;
+    }
+
+    /* ===== ZÄHLER ===== */
+    .zaehler-bereich {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .zaehler-zahl {
+      font-family: 'Caveat', cursive;
+      font-size: 72px;
+      font-weight: 600;
+      color: #9C1F1F;
+      line-height: 1;
+      transition: transform 0.15s cubic-bezier(.34,1.56,.64,1);
+    }
+
+    .zaehler-zahl.puls {
+      transform: scale(1.25);
+    }
+
+    .zaehler-text {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-size: 18px;
+      color: #888;
+      margin-top: 6px;
+      min-height: 28px;
+      transition: opacity 0.3s ease;
+    }
+
+    /* ===== DER GROSSE BUTTON ===== */
+    .bohnen-button {
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      -webkit-tap-highlight-color: transparent;
+      outline: none;
+      transition: transform 0.12s ease;
+    }
+
+    /* Heller Ring um den Button */
+    .bohnen-button::before {
+      content: '';
+      position: absolute;
+      inset: -8px;
+      border-radius: 50%;
+      border: 2px solid #e8ddd0;
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .bohnen-button:active {
+      transform: scale(0.91);
+    }
+
+    .bohnen-button:active::before {
+      border-color: #9C1F1F;
+      transform: scale(1.04);
+    }
+
+    .bohnen-button img {
+      width: 160px;
+      height: auto;
+      filter: drop-shadow(0 6px 16px rgba(139, 58, 42, 0.25));
+      transition: filter 0.2s ease;
+      pointer-events: none;
+    }
+
+    .bohnen-button:active img {
+      filter: drop-shadow(0 2px 6px rgba(139, 58, 42, 0.4));
+    }
+
+    /* ===== BESTÄTIGUNGS-NACHRICHT (kurz einblenden) ===== */
+    .bestaetigung {
+      position: fixed;
+      bottom: max(48px, env(safe-area-inset-bottom, 48px));
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #9C1F1F;
+      color: #fff;
+      font-family: 'Caveat', cursive;
+      font-size: 22px;
+      padding: 10px 28px;
+      border-radius: 100px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      white-space: nowrap;
+    }
+
+    .bestaetigung.sichtbar {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ===== KLEINER LINK ZUM JOURNAL ===== */
+    .journal-link {
+      position: fixed;
+      bottom: max(16px, env(safe-area-inset-bottom, 16px));
+      right: 20px;
+      font-family: 'Playfair Display', serif;
+      font-size: 11px;
+      color: #ccc;
+      text-decoration: none;
+      letter-spacing: 0.08em;
+    }
+
+    .journal-link:hover { color: #999; }
+  </style>
+</head>
+<body>
+
+  <div class="datum" id="datum"></div>
+
+  <div class="zaehler-bereich">
+    <div class="zaehler-zahl" id="zaehler-zahl">0</div>
+    <div class="zaehler-text" id="zaehler-text">Noch kein schöner Moment heute</div>
+  </div>
+
+  <button class="bohnen-button" id="bohnen-button" aria-label="Schönen Moment zählen">
+    <img src="img/Bohne.svg" alt="Kaffeebohne">
+  </button>
+
+  <div class="bestaetigung" id="bestaetigung">🫘 Gezählt!</div>
+
+  <a class="journal-link" href="index.html">→ Journal öffnen</a>
+
+  <script>
+    // ===== HILFSFUNKTIONEN =====
+
+    // localStorage-Key ist tagesabhängig — täglich Neustart
+    function lsKey() {
+      return 'journal_bohnen_' + new Date().toISOString().slice(0, 10);
+    }
+
+    // Heutiges Datum schön formatiert
+    function datumFormatieren() {
+      return new Date().toLocaleDateString('de-DE', {
+        weekday: 'long', day: 'numeric', month: 'long'
+      });
+    }
+
+    // Pluraltext je nach Anzahl
+    function zaehlerText(n) {
+      if (n === 0) return 'Noch kein schöner Moment heute';
+      if (n === 1) return 'Ein schöner Moment';
+      if (n === 2) return 'Zwei schöne Momente';
+      if (n === 3) return 'Drei schöne Momente';
+      return `${n} schöne Momente`;
+    }
+
+    // ===== ZUSTAND =====
+    let anzahl = 0;
+
+    function laden() {
+      const gespeichert = localStorage.getItem(lsKey());
+      anzahl = parseInt(gespeichert || '0') || 0;
+    }
+
+    function speichern() {
+      localStorage.setItem(lsKey(), String(anzahl));
+    }
+
+    function anzeigenAktualisieren() {
+      document.getElementById('zaehler-zahl').textContent = anzahl;
+      document.getElementById('zaehler-text').textContent = zaehlerText(anzahl);
+    }
+
+    // ===== KLICK-LOGIK =====
+    let bestaetigungsTimer = null;
+
+    document.getElementById('bohnen-button').addEventListener('click', () => {
+      anzahl++;
+      speichern();
+      anzeigenAktualisieren();
+
+      // Zähler-Puls
+      const zahl = document.getElementById('zaehler-zahl');
+      zahl.classList.remove('puls');
+      requestAnimationFrame(() => requestAnimationFrame(() => zahl.classList.add('puls')));
+      zahl.addEventListener('transitionend', () => zahl.classList.remove('puls'), { once: true });
+
+      // Bestätigungs-Pill einblenden
+      const bestaetigung = document.getElementById('bestaetigung');
+      bestaetigung.textContent = anzahl === 1 ? '🫘 Erster Moment!' : `🫘 Gezählt! (${anzahl})`;
+      bestaetigung.classList.add('sichtbar');
+      clearTimeout(bestaetigungsTimer);
+      bestaetigungsTimer = setTimeout(() => bestaetigung.classList.remove('sichtbar'), 1800);
+    });
+
+    // ===== INIT =====
+    document.getElementById('datum').textContent = datumFormatieren();
+    laden();
+    anzeigenAktualisieren();
+
+    // Falls Journal im Hintergrund offen ist: sync bei Sichtbarkeit
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        laden();
+        anzeigenAktualisieren();
+      }
+    });
+  </script>
+
+</body>
+</html>
